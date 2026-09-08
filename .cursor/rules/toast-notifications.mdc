@@ -1,0 +1,27 @@
+---
+description: Use bottom-right toast popups for all transient user feedback
+globs: client/src/**/*.{jsx,js}
+alwaysApply: true
+---
+
+# Toast notifications
+
+Do **not** use inline Bootstrap alerts (`alert alert-success`, `alert alert-danger`, etc.) for transient success/error/info feedback.
+
+Use the global toast system instead:
+
+```jsx
+import { useToast } from '../hooks/useToast';
+
+const toast = useToast();
+
+toast.success('Saved successfully');
+toast.error('Something went wrong');
+toast.info('Heads up');
+toast.apiError(err, 'Request failed');
+```
+
+- Toasts render bottom-right via `ToastProvider` in `App.jsx`.
+- `ToastProvider` is already mounted app-wide — call `useToast()` in any page/component.
+- Keep inline alerts only for **static page content** (e.g. multi-step instructions), not action results.
+- For load failures, toast the error and show a simple empty/retry UI — avoid top-of-page alert banners.

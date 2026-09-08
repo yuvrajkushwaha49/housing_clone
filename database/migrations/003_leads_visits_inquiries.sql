@@ -1,0 +1,106 @@
+-- Migration 003: Inquiries, leads, site visits, notifications
+SET NAMES utf8mb4;
+
+CREATE TABLE IF NOT EXISTS inquiries (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  uuid CHAR(36) NOT NULL,
+  property_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT UNSIGNED NULL,
+  name VARCHAR(150) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  phone VARCHAR(20) NULL,
+  message TEXT NOT NULL,
+  status ENUM('new','read','responded','closed') NOT NULL DEFAULT 'new',
+  lead_id BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_by BIGINT UNSIGNED NULL,
+  updated_by BIGINT UNSIGNED NULL,
+  deleted_at DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_inquiries_uuid (uuid),
+  KEY idx_inquiries_property (property_id),
+  KEY idx_inquiries_user (user_id),
+  KEY idx_inquiries_status (status),
+  CONSTRAINT fk_inquiries_property FOREIGN KEY (property_id) REFERENCES properties (id),
+  CONSTRAINT fk_inquiries_user FOREIGN KEY (user_id) REFERENCES users (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS leads (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  uuid CHAR(36) NOT NULL,
+  source ENUM('inquiry','visit','chat','call','ad','manual') NOT NULL DEFAULT 'inquiry',
+  property_id BIGINT UNSIGNED NULL,
+  assigned_to_user_id BIGINT UNSIGNED NOT NULL,
+  buyer_user_id BIGINT UNSIGNED NULL,
+  guest_name VARCHAR(150) NULL,
+  guest_email VARCHAR(255) NULL,
+  guest_phone VARCHAR(20) NULL,
+  status ENUM('new','contacted','qualified','negotiation','won','lost') NOT NULL DEFAULT 'new',
+  notes TEXT NULL,
+  inquiry_id BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_by BIGINT UNSIGNED NULL,
+  updated_by BIGINT UNSIGNED NULL,
+  deleted_at DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_leads_uuid (uuid),
+  KEY idx_leads_assigned (assigned_to_user_id, status),
+  KEY idx_leads_property (property_id),
+  KEY idx_leads_buyer (buyer_user_id),
+  CONSTRAINT fk_leads_property FOREIGN KEY (property_id) REFERENCES properties (id),
+  CONSTRAINT fk_leads_assigned FOREIGN KEY (assigned_to_user_id) REFERENCES users (id),
+  CONSTRAINT fk_leads_buyer FOREIGN KEY (buyer_user_id) REFERENCES users (id),
+  CONSTRAINT fk_leads_inquiry FOREIGN KEY (inquiry_id) REFERENCES inquiries (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- lead_id on inquiries is informational (no FK to avoid circular dependency)
+
+CREATE TABLE IF NOT EXISTS site_visits (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  uuid CHAR(36) NOT NULL,
+  property_id BIGINT UNSIGNED NOT NULL,
+  requester_user_id BIGINT UNSIGNED NULL,
+  host_user_id BIGINT UNSIGNED NOT NULL,
+  guest_name VARCHAR(150) NULL,
+  guest_email VARCHAR(255) NULL,
+  guest_phone VARCHAR(20) NULL,
+  scheduled_at DATETIME NOT NULL,
+  status ENUM('requested','confirmed','completed','cancelled','no_show') NOT NULL DEFAULT 'requested',
+  notes TEXT NULL,
+  host_notes TEXT NULL,
+  lead_id BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_by BIGINT UNSIGNED NULL,
+  updated_by BIGINT UNSIGNED NULL,
+  deleted_at DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_site_visits_uuid (uuid),
+  KEY idx_visits_property (property_id),
+  KEY idx_visits_host (host_user_id, scheduled_at),
+  KEY idx_visits_requester (requester_user_id),
+  KEY idx_visits_status (status),
+  CONSTRAINT fk_visits_property FOREIGN KEY (property_id) REFERENCES properties (id),
+  CONSTRAINT fk_visits_requester FOREIGN KEY (requester_user_id) REFERENCES users (id),
+  CONSTRAINT fk_visits_host FOREIGN KEY (host_user_id) REFERENCES users (id),
+  CONSTRAINT fk_visits_lead FOREIGN KEY (lead_id) REFERENCES leads (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  uuid CHAR(36) NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  type VARCHAR(100) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  body VARCHAR(500) NOT NULL,
+  data JSON NULL,
+  is_read TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  read_at DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_notifications_uuid (uuid),
+  KEY idx_notifications_user_unread (user_id, is_read, created_at),
+  CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

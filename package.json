@@ -1,0 +1,25 @@
+{
+  "name": "hous",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Workians Real Estate Platform — local dev & production helpers",
+  "scripts": {
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "predev": "node scripts/free-port.js 5000",
+    "dev": "node scripts/show-lan-urls.js && concurrently -n api,web -c blue,magenta \"npm run dev --prefix server\" \"node scripts/wait-for-api.js && npm run dev --prefix client\"",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "start:api": "npm run start --prefix server",
+    "migrate": "npm run migrate --prefix server",
+    "seed": "npm run seed --prefix server",
+    "setup": "npm run install:all && npm run migrate && npm run seed"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
