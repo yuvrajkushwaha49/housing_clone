@@ -24,6 +24,8 @@ export const listBuilders = asyncHandler(async (req, res) => {
     page: Number(req.query.page || 1),
     limit: Number(req.query.limit || 20),
     q: req.query.q,
+    featured: req.query.featured === '1' || req.query.featured === 'true',
+    cityId: req.query.cityId || undefined,
   });
   return ApiResponse.success(res, result.items, 'Builders', 200, result.meta);
 });
@@ -72,6 +74,7 @@ export const listProjects = asyncHandler(async (req, res) => {
       localityId: req.query.localityId,
       status: req.query.status,
       builderId: req.query.builderId,
+      sort: req.query.sort,
     },
     req.user
   );

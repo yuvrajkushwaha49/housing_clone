@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authService } from '../../services';
 import { useToast } from '../../hooks/useToast';
+import { BrandIcon } from '../../components/BrandAssets';
 
 export default function VerifyEmailPendingPage() {
   const toast = useToast();  const [params] = useSearchParams();
@@ -45,7 +46,7 @@ export default function VerifyEmailPendingPage() {
 
   return (
     <div className="text-center">
-      <div className="brand-mark mx-auto mb-3">@</div>
+      <BrandIcon className="brand-icon--lg mx-auto mb-3" />
       <h1 className="h4 mb-2">{heading}</h1>
       <p className="text-secondary small mb-3">{intro}</p>
       <p className="mb-3">

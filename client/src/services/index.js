@@ -115,9 +115,11 @@ export const cmsService = {
   adminListBlogs: () => api.get('/cms/admin/blogs'),
   adminSaveBlog: (payload, uuid) =>
     uuid ? api.put(`/cms/admin/blogs/${uuid}`, payload) : api.post('/cms/admin/blogs', payload),
+  adminDeleteBlog: (uuid) => api.delete(`/cms/admin/blogs/${uuid}`),
   adminListNews: () => api.get('/cms/admin/news'),
   adminSaveNews: (payload, uuid) =>
     uuid ? api.put(`/cms/admin/news/${uuid}`, payload) : api.post('/cms/admin/news', payload),
+  adminDeleteNews: (uuid) => api.delete(`/cms/admin/news/${uuid}`),
   adminListBanners: () => api.get('/cms/admin/banners'),
   adminSaveBanner: (payload, uuid) =>
     uuid ? api.put(`/cms/admin/banners/${uuid}`, payload) : api.post('/cms/admin/banners', payload),
@@ -188,6 +190,7 @@ export const bookingService = {
 export const profileService = {
   me: () => api.get('/profiles/me'),
   updateMe: (payload) => api.put('/profiles/me', payload),
+  recommendedSellers: (params) => api.get('/sellers/recommended', { params }),
   submitVerification: (payload) => api.post('/verification-requests', payload),
   myVerifications: () => api.get('/verification-requests/mine'),
   listVerifications: (params) => api.get('/verification-requests', { params }),

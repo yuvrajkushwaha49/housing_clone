@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import PublicSiteHeader from '../components/public/PublicSiteHeader';
+import PublicSiteFooter from '../components/public/PublicSiteFooter';
 import Sidebar from './Sidebar';
 import { PANELS_WITHOUT_SIDEBAR } from '../constants';
 
@@ -17,6 +18,7 @@ export default function PanelLayout() {
           <main className="app-content">
             <Outlet />
           </main>
+          {hideSidebar && <PublicSiteFooter />}
         </div>
       </div>
     </div>

@@ -61,6 +61,36 @@ SELECT UUID(), 'how-to-list-your-property',
   'published', 'How to list your property | Hous', NOW()
 WHERE NOT EXISTS (SELECT 1 FROM blogs WHERE slug = 'how-to-list-your-property' AND deleted_at IS NULL);
 
+INSERT INTO blogs
+  (uuid, slug, title, excerpt, body, status, meta_title, meta_description, published_at)
+SELECT UUID(), 'first-time-home-buyer-checklist',
+  'First-time home buyer checklist',
+  'Documents, budget tips, and site-visit questions before you book a flat.',
+  '<p>Buying your first home is exciting — and easier with a clear checklist.</p><ul><li><strong>Budget</strong> — fix an all-in budget including stamp duty, registration, and interiors.</li><li><strong>Loan pre-approval</strong> — get a sanction letter so negotiations are realistic.</li><li><strong>Documents</strong> — ask for title deed, approvals, and occupancy certificate where applicable.</li><li><strong>Site visit</strong> — check light, ventilation, parking, water pressure, and neighbourhood noise.</li><li><strong>Compare</strong> — shortlist 3 options on Workians before you pay a token.</li></ul>',
+  'published', 'First-time home buyer checklist | Workians',
+  'Documents, budget tips, and site-visit questions before you book a flat.', NOW()
+WHERE NOT EXISTS (SELECT 1 FROM blogs WHERE slug = 'first-time-home-buyer-checklist' AND deleted_at IS NULL);
+
+INSERT INTO blogs
+  (uuid, slug, title, excerpt, body, status, meta_title, meta_description, published_at)
+SELECT UUID(), 'how-to-verify-a-builder-project',
+  'How to verify a builder project',
+  'RERA, amenities, delivery timelines — what to check before you invest.',
+  '<p>Before you book a under-construction or ready project, verify these basics:</p><ol><li><strong>RERA registration</strong> — confirm the project ID and promoter details.</li><li><strong>Approvals</strong> — layout plans, fire NOC, and environmental clearances where required.</li><li><strong>Delivery track record</strong> — past projects of the same builder.</li><li><strong>Amenities vs maintenance</strong> — ask for monthly costs.</li><li><strong>Unit inventory</strong> — carpet area, facing, floor plan, and parking allotment.</li></ol>',
+  'published', 'How to verify a builder project | Workians',
+  'RERA, amenities, delivery timelines — what to check before you invest.', NOW()
+WHERE NOT EXISTS (SELECT 1 FROM blogs WHERE slug = 'how-to-verify-a-builder-project' AND deleted_at IS NULL);
+
+INSERT INTO blogs
+  (uuid, slug, title, excerpt, body, status, meta_title, meta_description, published_at)
+SELECT UUID(), 'renting-vs-buying-in-2026',
+  'Renting vs buying in 2026',
+  'A practical comparison so you can choose what fits your city and career stage.',
+  '<p>There is no one answer — it depends on how long you will stay, interest rates, and local rents.</p><p><strong>Rent if</strong> you may relocate in 2–3 years.</p><p><strong>Buy if</strong> you have stable income and plan to stay in the city.</p><p>Use Workians to compare sale and rent listings in the same locality.</p>',
+  'published', 'Renting vs buying in 2026 | Workians',
+  'A practical comparison so you can choose what fits your city and career stage.', NOW()
+WHERE NOT EXISTS (SELECT 1 FROM blogs WHERE slug = 'renting-vs-buying-in-2026' AND deleted_at IS NULL);
+
 INSERT INTO news
   (uuid, slug, title, excerpt, body, status, meta_title, published_at)
 SELECT UUID(), 'hous-platform-launch',
@@ -69,6 +99,16 @@ SELECT UUID(), 'hous-platform-launch',
   '<p>Operators can now manage locations, listings, leads, chat, support tickets, and subscription plans from their panels.</p>',
   'published', 'Hous launch update', NOW()
 WHERE NOT EXISTS (SELECT 1 FROM news WHERE slug = 'hous-platform-launch' AND deleted_at IS NULL);
+
+INSERT INTO news
+  (uuid, slug, title, excerpt, body, status, meta_title, meta_description, published_at)
+SELECT UUID(), 'workians-news-guides-live',
+  'News & Guides is live on Workians',
+  'Tips for buyers, sellers, and investors — now on the home page and /blog.',
+  '<p>Workians now publishes News &amp; Guides to help you make clearer property decisions.</p><p>Find short checklists and how-tos on the home page and at <strong>/blog</strong>.</p>',
+  'published', 'News & Guides is live on Workians',
+  'Tips for buyers, sellers, and investors — now on the home page and /blog.', NOW()
+WHERE NOT EXISTS (SELECT 1 FROM news WHERE slug = 'workians-news-guides-live' AND deleted_at IS NULL);
 
 INSERT INTO banners
   (uuid, title, link_url, position, is_active, sort_order)

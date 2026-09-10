@@ -1,7 +1,13 @@
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 function MegaColumn({ column, onNavigate }) {
+  const navigate = useNavigate();
   const isIconColumn = column.variant === 'icons';
+
+  const handleItemClick = (to) => {
+    if (to) navigate(to);
+    onNavigate?.();
+  };
 
   return (
     <div className={`home-housing-mega-col${isIconColumn ? ' home-housing-mega-col--icons' : ''}`}>
@@ -9,10 +15,14 @@ function MegaColumn({ column, onNavigate }) {
       <ul className="home-housing-mega-list">
         {column.items.map((item) => (
           <li key={`${column.title}-${item.label}`}>
-            <Link to={item.to} className="home-housing-mega-link" onClick={onNavigate}>
+            <button
+              type="button"
+              className="home-housing-mega-link"
+              onClick={() => handleItemClick(item.to)}
+            >
               {item.icon && <i className={`bi ${item.icon}`} aria-hidden />}
               <span>{item.label}</span>
-            </Link>
+            </button>
           </li>
         ))}
         {column.items.length === 0 && (

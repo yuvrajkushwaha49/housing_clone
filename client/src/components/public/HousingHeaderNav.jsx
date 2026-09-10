@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { getHomeMasters } from '../../utils/homeMastersCache';
 import { buildHeaderMegaMenus, HEADER_NAV_ITEMS } from '../../utils/headerNavConfig';
 
@@ -12,6 +12,7 @@ export default function HousingHeaderNav({
   cityId,
   localities = [],
 }) {
+  const navigate = useNavigate();
   const [openMenuId, setOpenMenuId] = useState(null);
   const [expandedMobileId, setExpandedMobileId] = useState(null);
   const [masters, setMasters] = useState({ categories: [], types: [] });
@@ -41,11 +42,12 @@ export default function HousingHeaderNav({
     onMegaMenuChange?.(megaMenus[menuId] || null);
   };
 
-  const handleNavigate = () => {
+  const handleNavigate = (to) => {
     setOpenMenuId(null);
     setExpandedMobileId(null);
     onMegaMenuChange?.(null);
     onNavigate?.();
+    if (to) navigate(to);
   };
 
   useEffect(() => () => {
@@ -84,15 +86,17 @@ export default function HousingHeaderNav({
                   <i className={`bi bi-chevron-${isOpen ? 'up' : 'down'}`} aria-hidden />
                 </button>
               ) : (
-                <Link
-                  to={menu?.to || searchPath}
-                  className="home-housing-nav-btn home-housing-nav-btn--link"
-                  onClick={handleNavigate}
+                <button
+                  type="button"
+                  className="home-housing-nav-btn"
+                  aria-expanded={isOpen}
+                  aria-haspopup="true"
+                  onClick={() => handleOpen(item.id)}
                   onFocus={() => handleOpen(item.id)}
                 >
                   {item.label}
                   <i className="bi bi-chevron-down" aria-hidden />
-                </Link>
+                </button>
               )}
 
               {isDrawer && isOpen && menu && (
@@ -105,14 +109,14 @@ export default function HousingHeaderNav({
                           <ul className="home-housing-mega-list">
                             {column.items.map((linkItem) => (
                               <li key={`${column.title}-${linkItem.label}`}>
-                                <Link
-                                  to={linkItem.to}
+                                <button
+                                  type="button"
                                   className="home-housing-mega-link home-housing-mega-link--drawer"
-                                  onClick={handleNavigate}
+                                  onClick={() => handleNavigate(linkItem.to)}
                                 >
                                   {linkItem.icon && <i className={`bi ${linkItem.icon}`} aria-hidden />}
                                   <span>{linkItem.label}</span>
-                                </Link>
+                                </button>
                               </li>
                             ))}
                           </ul>

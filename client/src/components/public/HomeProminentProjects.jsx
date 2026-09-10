@@ -44,7 +44,7 @@ export default function HomeProminentProjects({
           <div>
             <h2>{sectionTitle}</h2>
             <p>
-              Handpicked new launches and top-rated builder projects
+              Best projects to look out for
               {cityName ? ` in ${cityName}` : ''}.
             </p>
           </div>

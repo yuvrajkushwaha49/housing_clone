@@ -38,6 +38,7 @@ export function formatShortLocation(project) {
 }
 
 export function formatProjectConfiguration(project) {
+  if (project.configLabel) return project.configLabel;
   if (project.category?.name) return project.category.name;
   return 'Residential project';
 }

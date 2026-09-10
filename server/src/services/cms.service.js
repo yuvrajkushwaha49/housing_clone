@@ -1,7 +1,7 @@
 import { query } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import { generateUuid } from '../helpers/crypto.helper.js';
-import { slugify } from '../helpers/storage.helper.js';
+import { deleteStoredFile, slugify, storeUpload } from '../helpers/storage.helper.js';
 import { writeAuditLog } from '../helpers/audit.helper.js';
 
 async function uniqueSlug(table, base, excludeId = null) {
@@ -226,16 +226,31 @@ export async function getBlogBySlug(slug, { includeDraft = false } = {}) {
   return mapArticle(rows[0]);
 }
 
-export async function upsertBlog(payload, user, req, uuid = null) {
+export async function upsertBlog(payload, user, req, uuid = null, file = null) {
   if (uuid) {
     const [existing] = await query(
-      `SELECT id FROM blogs WHERE uuid = :uuid AND deleted_at IS NULL LIMIT 1`,
+      `SELECT id, cover_image FROM blogs WHERE uuid = :uuid AND deleted_at IS NULL LIMIT 1`,
       { uuid }
     );
     if (!existing.length) throw new ApiError(404, 'Blog not found');
+    let coverImage = existing[0].cover_image;
+    if (file) {
+      const stored = await storeUpload(file, { folder: 'cms', mediaType: 'image' });
+      if (coverImage) await deleteStoredFile(coverImage);
+      coverImage = stored.filePath;
+    } else if (payload.removeCover === true || payload.removeCover === 'true' || payload.removeCover === '1') {
+      if (coverImage) await deleteStoredFile(coverImage);
+      coverImage = null;
+    }
+    let slug = null;
+    if (payload.slug) {
+      slug = await uniqueSlug('blogs', payload.slug, existing[0].id);
+    }
     await query(
       `UPDATE blogs SET
-        title = :title, excerpt = :excerpt, body = :body, status = COALESCE(:status, status),
+        title = :title, excerpt = :excerpt, body = :body, cover_image = :coverImage,
+        ${slug ? 'slug = :slug,' : ''}
+        status = COALESCE(:status, status),
         meta_title = :metaTitle, meta_description = :metaDescription,
         published_at = CASE WHEN :status = 'published' AND published_at IS NULL THEN NOW() ELSE published_at END
        WHERE id = :id`,
@@ -244,6 +259,8 @@ export async function upsertBlog(payload, user, req, uuid = null) {
         title: payload.title,
         excerpt: payload.excerpt || null,
         body: payload.body,
+        coverImage,
+        slug,
         status: payload.status || null,
         metaTitle: payload.metaTitle || payload.title,
         metaDescription: payload.metaDescription || null,
@@ -256,10 +273,15 @@ export async function upsertBlog(payload, user, req, uuid = null) {
   const newUuid = generateUuid();
   const slug = await uniqueSlug('blogs', payload.slug || payload.title);
   const status = payload.status || 'draft';
+  let coverImage = null;
+  if (file) {
+    const stored = await storeUpload(file, { folder: 'cms', mediaType: 'image' });
+    coverImage = stored.filePath;
+  }
   await query(
     `INSERT INTO blogs
-      (uuid, slug, title, excerpt, body, author_id, status, meta_title, meta_description, published_at)
-     VALUES (:uuid, :slug, :title, :excerpt, :body, :authorId, :status, :metaTitle, :metaDescription,
+      (uuid, slug, title, excerpt, body, cover_image, author_id, status, meta_title, meta_description, published_at)
+     VALUES (:uuid, :slug, :title, :excerpt, :body, :coverImage, :authorId, :status, :metaTitle, :metaDescription,
              ${status === 'published' ? 'NOW()' : 'NULL'})`,
     {
       uuid: newUuid,
@@ -267,6 +289,7 @@ export async function upsertBlog(payload, user, req, uuid = null) {
       title: payload.title,
       excerpt: payload.excerpt || null,
       body: payload.body,
+      coverImage,
       authorId: user.id,
       status,
       metaTitle: payload.metaTitle || payload.title,
@@ -283,6 +306,24 @@ export async function upsertBlog(payload, user, req, uuid = null) {
     userAgent: req.get('user-agent'),
   });
   return getBlogBySlug(slug, { includeDraft: true });
+}
+
+export async function deleteBlog(uuid, user, req) {
+  const [rows] = await query(
+    `SELECT id, cover_image FROM blogs WHERE uuid = :uuid AND deleted_at IS NULL LIMIT 1`,
+    { uuid }
+  );
+  if (!rows.length) throw new ApiError(404, 'Blog not found');
+  await query(`UPDATE blogs SET deleted_at = NOW() WHERE id = :id`, { id: rows[0].id });
+  if (rows[0].cover_image) await deleteStoredFile(rows[0].cover_image);
+  await writeAuditLog({
+    actorUserId: user.id,
+    action: 'cms.blog.delete',
+    entityType: 'blog',
+    entityId: uuid,
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent'),
+  });
 }
 
 export async function listNews({ admin = false, limit = 20 } = {}) {
@@ -317,16 +358,31 @@ export async function getNewsBySlug(slug, { includeDraft = false } = {}) {
   return mapArticle(rows[0]);
 }
 
-export async function upsertNews(payload, user, req, uuid = null) {
+export async function upsertNews(payload, user, req, uuid = null, file = null) {
   if (uuid) {
     const [existing] = await query(
-      `SELECT id, slug FROM news WHERE uuid = :uuid AND deleted_at IS NULL LIMIT 1`,
+      `SELECT id, slug, cover_image FROM news WHERE uuid = :uuid AND deleted_at IS NULL LIMIT 1`,
       { uuid }
     );
     if (!existing.length) throw new ApiError(404, 'News not found');
+    let coverImage = existing[0].cover_image;
+    if (file) {
+      const stored = await storeUpload(file, { folder: 'cms', mediaType: 'image' });
+      if (coverImage) await deleteStoredFile(coverImage);
+      coverImage = stored.filePath;
+    } else if (payload.removeCover === true || payload.removeCover === 'true' || payload.removeCover === '1') {
+      if (coverImage) await deleteStoredFile(coverImage);
+      coverImage = null;
+    }
+    let slug = existing[0].slug;
+    if (payload.slug) {
+      slug = await uniqueSlug('news', payload.slug, existing[0].id);
+    }
     await query(
       `UPDATE news SET
-        title = :title, excerpt = :excerpt, body = :body, status = COALESCE(:status, status),
+        title = :title, excerpt = :excerpt, body = :body, cover_image = :coverImage,
+        slug = :slug,
+        status = COALESCE(:status, status),
         meta_title = :metaTitle, meta_description = :metaDescription,
         published_at = CASE WHEN :status = 'published' AND published_at IS NULL THEN NOW() ELSE published_at END
        WHERE id = :id`,
@@ -335,21 +391,28 @@ export async function upsertNews(payload, user, req, uuid = null) {
         title: payload.title,
         excerpt: payload.excerpt || null,
         body: payload.body,
+        coverImage,
+        slug,
         status: payload.status || null,
         metaTitle: payload.metaTitle || payload.title,
         metaDescription: payload.metaDescription || null,
       }
     );
-    return getNewsBySlug(existing[0].slug, { includeDraft: true });
+    return getNewsBySlug(slug, { includeDraft: true });
   }
 
   const newUuid = generateUuid();
   const slug = await uniqueSlug('news', payload.slug || payload.title);
   const status = payload.status || 'draft';
+  let coverImage = null;
+  if (file) {
+    const stored = await storeUpload(file, { folder: 'cms', mediaType: 'image' });
+    coverImage = stored.filePath;
+  }
   await query(
     `INSERT INTO news
-      (uuid, slug, title, excerpt, body, author_id, status, meta_title, meta_description, published_at)
-     VALUES (:uuid, :slug, :title, :excerpt, :body, :authorId, :status, :metaTitle, :metaDescription,
+      (uuid, slug, title, excerpt, body, cover_image, author_id, status, meta_title, meta_description, published_at)
+     VALUES (:uuid, :slug, :title, :excerpt, :body, :coverImage, :authorId, :status, :metaTitle, :metaDescription,
              ${status === 'published' ? 'NOW()' : 'NULL'})`,
     {
       uuid: newUuid,
@@ -357,6 +420,7 @@ export async function upsertNews(payload, user, req, uuid = null) {
       title: payload.title,
       excerpt: payload.excerpt || null,
       body: payload.body,
+      coverImage,
       authorId: user.id,
       status,
       metaTitle: payload.metaTitle || payload.title,
@@ -364,6 +428,24 @@ export async function upsertNews(payload, user, req, uuid = null) {
     }
   );
   return getNewsBySlug(slug, { includeDraft: true });
+}
+
+export async function deleteNews(uuid, user, req) {
+  const [rows] = await query(
+    `SELECT id, cover_image FROM news WHERE uuid = :uuid AND deleted_at IS NULL LIMIT 1`,
+    { uuid }
+  );
+  if (!rows.length) throw new ApiError(404, 'News not found');
+  await query(`UPDATE news SET deleted_at = NOW() WHERE id = :id`, { id: rows[0].id });
+  if (rows[0].cover_image) await deleteStoredFile(rows[0].cover_image);
+  await writeAuditLog({
+    actorUserId: user.id,
+    action: 'cms.news.delete',
+    entityType: 'news',
+    entityId: uuid,
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent'),
+  });
 }
 
 export async function listBanners({ position, admin = false } = {}) {

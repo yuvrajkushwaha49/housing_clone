@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import PublicSiteHeader from '../../components/public/PublicSiteHeader';
+import HomeHeader from '../../components/public/HomeHeader';
 import PublicSiteFooter from '../../components/public/PublicSiteFooter';
 import PropertySearchCard from '../../components/public/PropertySearchCard';
 import { PropertySearchResultsSkeleton } from '../../components/public/PropertySearchResultsSkeleton';
 import HomeProminentProjects from '../../components/public/HomeProminentProjects';
 import HomeNewProperties from '../../components/public/HomeNewProperties';
+import SearchFilterDropdown, { SearchBudgetDropdown } from '../../components/public/SearchFilterDropdown';
+import { useHomeLocationsContext } from '../../contexts/HomeLocationsContext';
 import {
   advertisementService,
   mastersService,
@@ -47,10 +49,29 @@ function filtersFromParams(params) {
   };
 }
 
+function purposeShortLabel(purpose) {
+  return PURPOSE_TABS.find((t) => t.value === purpose)?.label || formatPropertyPurpose(purpose);
+}
+
+const BUDGET_PRESETS = [
+  { label: 'Under ₹10K', min: '', max: '10000' },
+  { label: '₹10K - ₹25K', min: '10000', max: '25000' },
+  { label: '₹25K - ₹50K', min: '25000', max: '50000' },
+  { label: '₹50K - ₹1L', min: '50000', max: '100000' },
+  { label: 'Above ₹1L', min: '100000', max: '' },
+];
+
 export default function PropertySearchPage({ embedded = false }) {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
   const { accessToken, user } = useSelector((s) => s.auth);
+  const {
+    cities: homeCities,
+    cityId: homeCityId,
+    setCityId: setHomeCityId,
+    cityName: homeCityName,
+    localities: homeLocalities,
+  } = useHomeLocationsContext();
   const [items, setItems] = useState([]);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [cities, setCities] = useState([]);
@@ -59,7 +80,6 @@ export default function PropertySearchPage({ embedded = false }) {
   const [types, setTypes] = useState([]);
   const [ads, setAds] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [filters, setFilters] = useState(() => filtersFromParams(params));
 
   useEffect(() => {
@@ -72,6 +92,10 @@ export default function PropertySearchPage({ embedded = false }) {
       setCategories(cats.data.data);
       setTypes(tps.data.data);
       setAds(adsRes.data.data || []);
+      if (homeCities?.length) {
+        setCities(homeCities);
+        return;
+      }
       const india = countriesRes.data.data.find((c) => c.iso2 === 'IN') || countriesRes.data.data[0];
       if (india) {
         const states = await mastersService.listStates(india.id, { activeOnly: true });
@@ -81,18 +105,29 @@ export default function PropertySearchPage({ embedded = false }) {
         setCities(cityLists.flatMap((r) => r.data.data));
       }
     });
-  }, []);
+  }, [homeCities]);
+
+  useEffect(() => {
+    if (homeCities?.length) setCities(homeCities);
+  }, [homeCities]);
 
   useEffect(() => {
     if (!filters.cityId) {
-      setLocalities([]);
+      setLocalities(homeLocalities?.length ? homeLocalities : []);
+      return;
+    }
+    if (
+      String(filters.cityId) === String(homeCityId)
+      && homeLocalities?.length
+    ) {
+      setLocalities(homeLocalities);
       return;
     }
     mastersService
       .listLocalities(filters.cityId, { activeOnly: true })
       .then((res) => setLocalities(res.data.data || []))
       .catch(() => setLocalities([]));
-  }, [filters.cityId]);
+  }, [filters.cityId, homeCityId, homeLocalities]);
 
   const load = useCallback(async (nextFilters, page = 1) => {
     setLoading(true);
@@ -139,9 +174,12 @@ export default function PropertySearchPage({ embedded = false }) {
   };
 
   const cityName = useMemo(
-    () => cities.find((c) => String(c.id) === String(filters.cityId))?.name,
-    [cities, filters.cityId]
+    () => homeCityName
+      || cities.find((c) => String(c.id) === String(filters.cityId))?.name,
+    [homeCityName, cities, filters.cityId]
   );
+
+  const cityOptions = cities.length ? cities : homeCities;
 
   const filteredTypes = useMemo(
     () => types.filter((t) => !filters.categoryId || t.categoryId === filters.categoryId),
@@ -152,6 +190,17 @@ export default function PropertySearchPage({ embedded = false }) {
     () => types.find((t) => t.code === 'plot')?.id || '',
     [types]
   );
+
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    if (filters.localityId) n += 1;
+    if (filters.categoryId) n += 1;
+    if (filters.propertyTypeId) n += 1;
+    if (filters.bedrooms) n += 1;
+    if (filters.minPrice || filters.maxPrice) n += 1;
+    if (filters.minReviewRating) n += 1;
+    return n;
+  }, [filters]);
 
   const buildBuyerSearchUrl = useCallback((extra = {}) => {
     const query = {
@@ -171,6 +220,29 @@ export default function PropertySearchPage({ embedded = false }) {
     updateParams(next, page);
   };
 
+  const handleHeaderCityChange = (id) => {
+    const cityId = id || '';
+    setHomeCityId(cityId);
+    applyFilters({ cityId, localityId: '' });
+  };
+
+  // If search URL has a city, keep the shared header city matching it.
+  // If URL has no city, use the home header city for search.
+  useEffect(() => {
+    if (embedded) return;
+    const urlCity = params.get('cityId') || '';
+    if (urlCity) {
+      if (String(homeCityId || '') !== String(urlCity)) {
+        setHomeCityId(urlCity);
+      }
+      return;
+    }
+    if (homeCityId && String(filters.cityId || '') !== String(homeCityId)) {
+      applyFilters({ cityId: homeCityId, localityId: '' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedded, params, homeCityId]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     applyFilters();
@@ -182,6 +254,19 @@ export default function PropertySearchPage({ embedded = false }) {
 
   const handleSortChange = (sort) => {
     applyFilters({ sort });
+  };
+
+  const resetFilters = () => {
+    applyFilters({
+      q: '',
+      localityId: '',
+      categoryId: '',
+      propertyTypeId: '',
+      minPrice: '',
+      maxPrice: '',
+      bedrooms: '',
+      minReviewRating: '',
+    });
   };
 
   const save = async (e, id) => {
@@ -219,162 +304,157 @@ export default function PropertySearchPage({ embedded = false }) {
     }
   };
 
-  const filterForm = (
-    <form className="property-search-filters" onSubmit={handleSubmit}>
-      <div className="property-search-filters-main">
-        <div className="property-search-field property-search-field--grow">
+  const pageStart = meta.total === 0 ? 0 : ((meta.page - 1) * 12) + 1;
+  const pageEnd = Math.min(meta.page * 12, meta.total);
+
+  const searchTopbar = (
+    <form className="property-search-topbar-form" onSubmit={handleSubmit}>
+      
+
+      <div className="property-search-header-input property-search-header-input--full">
+        <i className="bi bi-search" aria-hidden />
+        <input
+          type="text"
+          value={filters.q}
+          onChange={(e) => setFilters({ ...filters, q: e.target.value })}
+          placeholder="Enter Locality, Landmark, Project or builder"
+          aria-label="Search keyword"
+        />
+        <button type="submit" className="property-search-header-submit" aria-label="Search">
           <i className="bi bi-search" aria-hidden />
-          <input
-            type="text"
-            value={filters.q}
-            onChange={(e) => setFilters({ ...filters, q: e.target.value })}
-            placeholder="Search locality, landmark, or keyword"
-            aria-label="Search keyword"
-          />
-        </div>
-        <div className="property-search-field">
-          <i className="bi bi-geo-alt" aria-hidden />
-          <select
-            value={filters.cityId}
-            onChange={(e) => setFilters({ ...filters, cityId: e.target.value, localityId: '' })}
-            aria-label="City"
-          >
-            <option value="">All cities</option>
-            {cities.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-        <button type="submit" className="btn btn-primary property-search-submit-btn">
-          Search
-        </button>
-        <button
-          type="button"
-          className="btn btn-outline-secondary property-search-advanced-toggle"
-          onClick={() => setShowAdvanced((v) => !v)}
-          aria-expanded={showAdvanced}
-        >
-          <i className={`bi bi-sliders ${showAdvanced ? 'me-1' : ''}`} aria-hidden />
-          {showAdvanced ? 'Hide filters' : 'More filters'}
         </button>
       </div>
-
-      {showAdvanced && (
-        <div className="property-search-filters-advanced">
-          <div className="row g-2">
-            <div className="col-md-3">
-              <label className="form-label">Locality</label>
-              <select
-                className="form-select form-select-sm"
-                value={filters.localityId}
-                onChange={(e) => setFilters({ ...filters, localityId: e.target.value })}
-                disabled={!filters.cityId}
-              >
-                <option value="">All localities</option>
-                {localities.map((l) => (
-                  <option key={l.id} value={l.id}>{l.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-md-3">
-              <label className="form-label">Category</label>
-              <select
-                className="form-select form-select-sm"
-                value={filters.categoryId}
-                onChange={(e) => setFilters({
-                  ...filters,
-                  categoryId: e.target.value,
-                  propertyTypeId: '',
-                })}
-              >
-                <option value="">All categories</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-md-3">
-              <label className="form-label">Property type</label>
-              <select
-                className="form-select form-select-sm"
-                value={filters.propertyTypeId}
-                onChange={(e) => setFilters({ ...filters, propertyTypeId: e.target.value })}
-              >
-                <option value="">All types</option>
-                {filteredTypes.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-md-3">
-              <label className="form-label">Bedrooms</label>
-              <select
-                className="form-select form-select-sm"
-                value={filters.bedrooms}
-                onChange={(e) => setFilters({ ...filters, bedrooms: e.target.value })}
-              >
-                <option value="">Any</option>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <option key={n} value={n}>{n}+ BHK</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-md-3">
-              <label className="form-label">Min price (₹)</label>
-              <input
-                type="number"
-                className="form-control form-control-sm"
-                value={filters.minPrice}
-                onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })}
-                placeholder="Min"
-              />
-            </div>
-            <div className="col-md-3">
-              <label className="form-label">Max price (₹)</label>
-              <input
-                type="number"
-                className="form-control form-control-sm"
-                value={filters.maxPrice}
-                onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })}
-                placeholder="Max"
-              />
-            </div>
-            <div className="col-md-3">
-              <label className="form-label">Min quality rating</label>
-              <select
-                className="form-select form-select-sm"
-                value={filters.minReviewRating}
-                onChange={(e) => setFilters({ ...filters, minReviewRating: e.target.value })}
-              >
-                <option value="">Any</option>
-                {[5, 6, 7, 8, 9].map((n) => (
-                  <option key={n} value={n}>{n}+ / 10</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-md-3 d-flex align-items-end">
-              <button type="submit" className="btn btn-primary btn-sm w-100">Apply filters</button>
-            </div>
-          </div>
-        </div>
-      )}
     </form>
   );
 
-  const purposeTabs = (
-    <div className="property-search-purpose-tabs" role="tablist">
-      {PURPOSE_TABS.map((tab) => (
-        <button
-          key={tab.value}
-          type="button"
-          role="tab"
-          aria-selected={filters.purpose === tab.value}
-          className={`property-search-purpose-tab ${filters.purpose === tab.value ? 'active' : ''}`}
-          onClick={() => handlePurposeChange(tab.value)}
+  const bhkOptions = useMemo(
+    () => [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n}+ BHK` })),
+    []
+  );
+
+  const typeOptions = useMemo(
+    () => filteredTypes.map((t) => ({ value: t.id, label: t.name })),
+    [filteredTypes]
+  );
+
+  const localityOptions = useMemo(
+    () => localities.map((l) => ({ value: l.id, label: l.name })),
+    [localities]
+  );
+
+  const categoryOptions = useMemo(
+    () => categories.map((c) => ({ value: c.id, label: c.name })),
+    [categories]
+  );
+
+  const ratingOptions = useMemo(
+    () => [5, 6, 7, 8, 9].map((n) => ({ value: String(n), label: `${n}+ / 10` })),
+    []
+  );
+
+  const chipBar = (
+    <div className="property-search-chipbar">
+      <div className="property-search-chips">
+        <SearchFilterDropdown
+          label="BHK"
+          placeholder="BHK"
+          value={filters.bedrooms}
+          options={bhkOptions}
+          onChange={(bedrooms) => applyFilters({ bedrooms })}
+        />
+
+        <SearchBudgetDropdown
+          minPrice={filters.minPrice}
+          maxPrice={filters.maxPrice}
+          presets={BUDGET_PRESETS}
+          onApply={({ minPrice, maxPrice }) => applyFilters({ minPrice, maxPrice })}
+        />
+
+        <SearchFilterDropdown
+          label="Property type"
+          placeholder="Property type"
+          value={filters.propertyTypeId}
+          options={typeOptions}
+          onChange={(propertyTypeId) => applyFilters({ propertyTypeId })}
+        />
+
+        <SearchFilterDropdown
+          label="Locality"
+          placeholder={filters.cityId ? 'Locality' : 'Select city first'}
+          value={filters.localityId}
+          options={localityOptions}
+          disabled={!filters.cityId}
+          onChange={(localityId) => applyFilters({ localityId })}
+        />
+
+        <SearchFilterDropdown
+          label="Category"
+          placeholder="Category"
+          value={filters.categoryId}
+          options={categoryOptions}
+          onChange={(categoryId) => applyFilters({ categoryId, propertyTypeId: '' })}
+        />
+
+        <SearchFilterDropdown
+          label="More filters"
+          placeholder="More filters"
+          buttonLabel={
+            filters.minReviewRating
+              ? `Rating ${filters.minReviewRating}+`
+              : 'More filters'
+          }
+          value={filters.minReviewRating}
+          options={ratingOptions}
+          className="ps-filter-dd--more"
+          menuClassName="ps-filter-dd-menu--more"
         >
-          {tab.label}
+          {({ close }) => (
+            <div className="ps-filter-more-panel">
+              <p className="ps-filter-more-title">
+                <i className="bi bi-sliders" aria-hidden />
+                Quality rating
+              </p>
+              <ul className="ps-filter-dd-list">
+                <li>
+                  <button
+                    type="button"
+                    className={`ps-filter-dd-option${!filters.minReviewRating ? ' is-selected' : ''}`}
+                    onClick={() => {
+                      applyFilters({ minReviewRating: '' });
+                      close();
+                    }}
+                  >
+                    Any rating
+                  </button>
+                </li>
+                {ratingOptions.map((opt) => (
+                  <li key={opt.value}>
+                    <button
+                      type="button"
+                      className={`ps-filter-dd-option${String(filters.minReviewRating) === opt.value ? ' is-selected' : ''}`}
+                      onClick={() => {
+                        applyFilters({ minReviewRating: opt.value });
+                        close();
+                      }}
+                    >
+                      {opt.label}
+                      {String(filters.minReviewRating) === opt.value && (
+                        <i className="bi bi-check2" aria-hidden />
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </SearchFilterDropdown>
+      </div>
+
+      {activeFilterCount > 0 && (
+        <button type="button" className="property-search-reset" onClick={resetFilters}>
+          Reset filters
         </button>
-      ))}
+      )}
     </div>
   );
 
@@ -386,23 +466,37 @@ export default function PropertySearchPage({ embedded = false }) {
         <>
           <div className="property-search-results-bar">
             <div>
-              <strong className="property-search-count">{meta.total.toLocaleString('en-IN')}</strong>
-              <span className="text-secondary ms-1">
-                {meta.total === 1 ? 'property' : 'properties'}
-                {cityName ? ` in ${cityName}` : ''}
-              </span>
+              <p className="property-search-breadcrumb mb-1">
+                <Link to="/">Home</Link>
+                <span>/</span>
+                <span>
+                  {purposeShortLabel(filters.purpose)}
+                  {cityName ? ` in ${cityName}` : ''}
+                </span>
+              </p>
+              <div className="property-search-count-line">
+                <strong>
+                  {meta.total === 0
+                    ? 'No properties found'
+                    : `Showing ${pageStart.toLocaleString('en-IN')} - ${pageEnd.toLocaleString('en-IN')} of ${meta.total.toLocaleString('en-IN')} properties`}
+                </strong>
+                {cityName ? <span className="text-secondary"> in {cityName}</span> : null}
+              </div>
             </div>
             <div className="property-search-results-actions">
-              <select
-                className="form-select form-select-sm property-search-sort"
-                value={filters.sort}
-                onChange={(e) => handleSortChange(e.target.value)}
-                aria-label="Sort results"
-              >
-                {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+              <label className="property-search-sort-label">
+                <span>Sort by</span>
+                <select
+                  className="form-select form-select-sm property-search-sort"
+                  value={filters.sort}
+                  onChange={(e) => handleSortChange(e.target.value)}
+                  aria-label="Sort results"
+                >
+                  {SORT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
               {accessToken && user?.role?.code === 'BUYER' && (
                 <Link to="/panel/buyer/compare" className="btn btn-sm btn-outline-secondary">
                   Compare list
@@ -416,27 +510,13 @@ export default function PropertySearchPage({ embedded = false }) {
               <i className="bi bi-house-x" aria-hidden />
               <h2>No properties found</h2>
               <p>Try changing filters or search in another city.</p>
-              <button
-                type="button"
-                className="btn btn-outline-primary btn-sm"
-                onClick={() => applyFilters({
-                  q: '',
-                  cityId: '',
-                  localityId: '',
-                  categoryId: '',
-                  propertyTypeId: '',
-                  minPrice: '',
-                  maxPrice: '',
-                  bedrooms: '',
-                  minReviewRating: '',
-                })}
-              >
-                Clear filters
+              <button type="button" className="btn btn-outline-primary btn-sm" onClick={resetFilters}>
+                Reset filters
               </button>
             </div>
           ) : (
             <>
-              <div className="property-search-grid">
+              <div className="property-search-list">
                 {items.map((p) => (
                   <PropertySearchCard
                     key={p.id}
@@ -479,29 +559,62 @@ export default function PropertySearchPage({ embedded = false }) {
 
   const resultsSection = (
     <div className="row g-4">
-      <div className="col-lg-9">
+      <div className={embedded ? 'col-12' : 'col-lg-9'}>
         {resultsBody}
       </div>
 
       {!embedded && (
         <div className="col-lg-3">
-          <aside className="property-search-sidebar panel-card">
-            <h2 className="h6 mb-3">Sponsored</h2>
-            {ads.length === 0 && <p className="text-secondary small mb-0">No ads right now</p>}
-            {ads.map((ad) => (
-              <a
-                key={ad.id}
-                href={ad.linkUrl || '#'}
-                className="property-search-ad"
-                target={ad.linkUrl?.startsWith('http') ? '_blank' : undefined}
-                rel="noreferrer"
-              >
-                {ad.imageUrl && (
-                  <img src={mediaUrl(ad.imageUrl)} alt="" loading="lazy" />
-                )}
-                <span>{ad.title}</span>
-              </a>
-            ))}
+          <aside className="property-search-sidebar">
+            <div className="hs-app-promo">
+              <div className="hs-app-promo-head">
+                <h2>Get our Free App</h2>
+                <span className="hs-app-promo-rating">
+                  <i className="bi bi-star-fill" aria-hidden /> 4.5
+                </span>
+              </div>
+              <div className="hs-app-promo-qr">
+                <div className="hs-app-promo-qr-box" aria-label="App QR coming soon">
+                  <i className="bi bi-qr-code" aria-hidden />
+                  <span className="hs-app-promo-qr-soon">Coming soon</span>
+                </div>
+                <p>App download QR will be available soon</p>
+              </div>
+              <label className="hs-app-promo-sms">
+                <span>Get App Download Link via SMS</span>
+                <div className="hs-app-promo-sms-row">
+                  <span className="hs-app-promo-cc">+91</span>
+                  <input type="tel" inputMode="numeric" placeholder="Mobile Number" maxLength={10} />
+                  <button type="button" aria-label="Send link" onClick={() => toast.info('App download SMS coming soon')}>
+                    <i className="bi bi-arrow-right" aria-hidden />
+                  </button>
+                </div>
+              </label>
+              <div className="hs-app-promo-stores">
+                <span className="hs-app-store-badge">Google Play</span>
+                <span className="hs-app-store-badge">App Store</span>
+              </div>
+            </div>
+
+            {ads.length > 0 && (
+              <div className="property-search-sidebar-card mt-3">
+                <h2 className="h6 mb-3">Sponsored</h2>
+                {ads.map((ad) => (
+                  <a
+                    key={ad.id}
+                    href={ad.linkUrl || '#'}
+                    className="property-search-ad"
+                    target={ad.linkUrl?.startsWith('http') ? '_blank' : undefined}
+                    rel="noreferrer"
+                  >
+                    {ad.imageUrl && (
+                      <img src={mediaUrl(ad.imageUrl)} alt="" loading="lazy" />
+                    )}
+                    <span>{ad.title}</span>
+                  </a>
+                ))}
+              </div>
+            )}
           </aside>
         </div>
       )}
@@ -516,7 +629,7 @@ export default function PropertySearchPage({ embedded = false }) {
             <div>
               <h1 className="property-search-embedded-title">Search properties</h1>
               <p className="property-search-embedded-subtitle">
-                {formatPropertyPurpose(filters.purpose)}
+                {purposeShortLabel(filters.purpose)}
                 {cityName ? ` in ${cityName}` : ' across all cities'}
               </p>
             </div>
@@ -531,15 +644,14 @@ export default function PropertySearchPage({ embedded = false }) {
               </Link>
             </div>
           </div>
-          {purposeTabs}
-          {filterForm}
+          {searchTopbar}
         </section>
 
+        <div className="property-search-embedded-filters">
+          {chipBar}
+        </div>
+
         <section className="property-search-embedded-results panel-card">
-          <div className="property-search-embedded-results-head">
-            <h2 className="h6 mb-0">Search results</h2>
-            <span className="small text-secondary">Listings matching your filters</span>
-          </div>
           {resultsBody}
         </section>
 
@@ -569,27 +681,29 @@ export default function PropertySearchPage({ embedded = false }) {
 
   return (
     <div className="property-search-page">
-      <PublicSiteHeader active="/search" />
+      <HomeHeader
+        cities={cityOptions}
+        selectedCityId={homeCityId || filters.cityId}
+        onCityChange={handleHeaderCityChange}
+        localities={homeLocalities}
+        overlay
+      />
 
-      <section className="property-search-hero">
+      <section className="property-search-topbar">
         <div className="container">
-          <div className="property-search-hero-head">
-            <div>
-              <h1>Search properties</h1>
-              <p>
-                {formatPropertyPurpose(filters.purpose)}
-                {cityName ? ` in ${cityName}` : ' across all cities'}
-              </p>
-            </div>
-            <Link to="/" className="btn btn-sm btn-outline-light">
-              <i className="bi bi-house" aria-hidden /> Home
-            </Link>
-          </div>
-
-          {purposeTabs}
-          {filterForm}
+          <h1 className="visually-hidden">
+            {purposeShortLabel(filters.purpose)}
+            {cityName ? ` in ${cityName}` : ' properties'}
+          </h1>
+          {searchTopbar}
         </div>
       </section>
+
+      <div className="property-search-filter-strip">
+        <div className="container">
+          {chipBar}
+        </div>
+      </div>
 
       <div className="container property-search-body">
         {resultsSection}

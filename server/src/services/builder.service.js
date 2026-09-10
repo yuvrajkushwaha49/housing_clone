@@ -418,7 +418,11 @@ export async function updateProfile(user, payload, req) {
   return submitProfileChangeRequest(user, payload, req);
 }
 
-export async function listBuilders({ page = 1, limit = 20, q } = {}) {
+export async function listBuilders({ page = 1, limit = 20, q, featured = false, cityId } = {}) {
+  if (featured) {
+    return listFeaturedDevelopers({ limit, cityId });
+  }
+
   const offset = (page - 1) * limit;
   const where = ['bp.deleted_at IS NULL'];
   const params = {};
@@ -448,6 +452,115 @@ export async function listBuilders({ page = 1, limit = 20, q } = {}) {
       limit: Number(limit),
       total: Number(countRows[0].total),
       totalPages: Math.ceil(Number(countRows[0].total) / limit) || 1,
+    },
+  };
+}
+
+/**
+ * Builders with public projects for the home "Featured Developers" section.
+ */
+export async function listFeaturedDevelopers({ limit = 6, cityId } = {}) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 6, 1), 12);
+  const params = {};
+  const cityFilter = cityId
+    ? 'AND (ci.uuid = :cityId OR bp.city_id IN (SELECT id FROM cities WHERE uuid = :cityId AND deleted_at IS NULL))'
+    : '';
+  if (cityId) params.cityId = cityId;
+
+  const publicProject = `(p.status = 'published' OR (p.status = 'pending' AND p.published_at IS NOT NULL))`;
+
+  const [rows] = await query(
+    `SELECT bp.uuid, bp.company_name, bp.logo_url, bp.about, bp.year_established,
+            c.uuid AS city_uuid, c.name AS city_name,
+            COUNT(DISTINCT p.id) AS project_count
+     FROM builder_profiles bp
+     INNER JOIN projects p ON p.builder_id = bp.id
+       AND p.deleted_at IS NULL
+       AND ${publicProject}
+     LEFT JOIN cities ci ON ci.id = p.city_id
+     LEFT JOIN cities c ON c.id = bp.city_id
+     WHERE bp.deleted_at IS NULL
+       ${cityFilter}
+     GROUP BY bp.id, bp.uuid, bp.company_name, bp.logo_url, bp.about, bp.year_established,
+              c.uuid, c.name
+     ORDER BY project_count DESC, bp.company_name ASC
+     LIMIT ${safeLimit}`,
+    params
+  );
+
+  if (!rows.length) {
+    return { items: [], meta: { page: 1, limit: safeLimit, total: 0, totalPages: 1 } };
+  }
+
+  const builderUuids = rows.map((r) => r.uuid);
+  const placeholders = builderUuids.map((_, i) => `:b${i}`).join(', ');
+  const builderParams = Object.fromEntries(builderUuids.map((id, i) => [`b${i}`, id]));
+
+  const [projectRows] = await query(
+    `SELECT
+       bp.uuid AS builder_uuid,
+       p.uuid AS project_uuid,
+       p.slug AS project_slug,
+       p.name AS project_name,
+       p.min_price,
+       p.max_price,
+       p.published_at,
+       lo.name AS locality_name,
+       ci.name AS city_name,
+       (SELECT pm.file_path FROM project_media pm
+        WHERE pm.project_id = p.id AND pm.deleted_at IS NULL AND pm.media_type = 'image'
+        ORDER BY pm.is_primary DESC, pm.sort_order ASC, pm.id ASC LIMIT 1) AS primary_image
+     FROM builder_profiles bp
+     INNER JOIN projects p ON p.builder_id = bp.id
+       AND p.deleted_at IS NULL
+       AND ${publicProject}
+     LEFT JOIN cities ci ON ci.id = p.city_id
+     LEFT JOIN localities lo ON lo.id = p.locality_id
+     WHERE bp.uuid IN (${placeholders})
+     ORDER BY p.published_at DESC, p.id DESC`,
+    builderParams
+  );
+
+  const projectByBuilder = {};
+  projectRows.forEach((r) => {
+    if (projectByBuilder[r.builder_uuid]) return;
+    projectByBuilder[r.builder_uuid] = {
+      id: r.project_uuid,
+      slug: r.project_slug,
+      name: r.project_name,
+      minPrice: r.min_price != null ? Number(r.min_price) : null,
+      maxPrice: r.max_price != null ? Number(r.max_price) : null,
+      location: [r.locality_name, r.city_name].filter(Boolean).join(', '),
+      primaryImage: r.primary_image ? `/uploads/${r.primary_image}` : null,
+    };
+  });
+
+  const items = rows.map((r) => {
+    let logoUrl = r.logo_url || null;
+    if (logoUrl && !logoUrl.startsWith('http') && !logoUrl.startsWith('/')) {
+      logoUrl = `/uploads/${logoUrl}`;
+    } else if (logoUrl && logoUrl.startsWith('uploads/')) {
+      logoUrl = `/${logoUrl}`;
+    }
+    return {
+      id: r.uuid,
+      companyName: r.company_name,
+      logoUrl,
+      about: r.about,
+      yearEstablished: r.year_established,
+      projectCount: Number(r.project_count || 0),
+      city: r.city_uuid ? { id: r.city_uuid, name: r.city_name } : null,
+      featuredProject: projectByBuilder[r.uuid] || null,
+    };
+  });
+
+  return {
+    items,
+    meta: {
+      page: 1,
+      limit: safeLimit,
+      total: items.length,
+      totalPages: 1,
     },
   };
 }

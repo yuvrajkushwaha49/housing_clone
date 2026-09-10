@@ -93,13 +93,14 @@ export async function createInquiry(payload, user, req) {
     (profile ? `${profile.firstName}${profile.lastName ? ` ${profile.lastName}` : ''}` : '');
   const email = payload.email || profile?.email || user?.email;
   const phone = (payload.phone || profile?.phone || '').toString().trim() || null;
-  if (!name || !email || !payload.message) {
-    throw new ApiError(400, 'Name, email, and message are required');
+  if (!name || !email) {
+    throw new ApiError(400, 'Name and email are required');
   }
   if (!phone) {
     throw new ApiError(400, 'Phone number is required');
   }
 
+  const inquiryMessage = (payload.message || '').toString().trim();
   const inquiryUuid = generateUuid();
   const leadUuid = generateUuid();
 
@@ -115,7 +116,7 @@ export async function createInquiry(payload, user, req) {
         name,
         email.toLowerCase(),
         phone,
-        payload.message,
+        inquiryMessage,
         user?.id || null,
       ]
     );

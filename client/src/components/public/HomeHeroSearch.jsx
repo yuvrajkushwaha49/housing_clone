@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { propertyService } from '../../services';
 import { getHomeMasters, resolveHeroTabFilters } from '../../utils/homeMastersCache';
-import buyHeroBg from '../../assets/hero_bg.png';
+import buyHeroBg from '../../assets/buy_hero_bg.png';
 import rentHeroBg from '../../assets/rent_bg_hero.png';
 import commercialHeroBg from '../../assets/commercial_hero_section.png';
 import pgHeroBg from '../../assets/pg_hero_bg.png';
@@ -12,17 +12,21 @@ const TABS = [
   { id: 'sale', label: 'Buy' },
   { id: 'rent', label: 'Rent' },
   { id: 'commercial', label: 'Commercial' },
-  { id: 'pg', label: 'PG/Co-living' },
+  { id: 'pg', label: 'PG/Co-Living' },
   { id: 'plots', label: 'Plots' },
 ];
 
-const HERO_BACKGROUNDS = {
+export const HERO_BACKGROUNDS = {
   sale: buyHeroBg,
   rent: rentHeroBg,
   commercial: commercialHeroBg,
   pg: pgHeroBg,
   plots: plotsHeroBg,
 };
+
+export function getHeroBackground(tab) {
+  return HERO_BACKGROUNDS[tab] || buyHeroBg;
+}
 
 function formatCount(n) {
   if (n == null) return null;
@@ -41,6 +45,7 @@ export default function HomeHeroSearch({
   searchPath = '/search',
   activeTab: activeTabProp,
   onTabChange,
+  embedded = false,
 }) {
   const navigate = useNavigate();
   const chipsRef = useRef(null);
@@ -125,10 +130,10 @@ export default function HomeHeroSearch({
 
   return (
     <section
-      className="home-hero"
-      style={{ backgroundImage: `url(${HERO_BACKGROUNDS[activeTab] || buyHeroBg})` }}
+      className={`home-hero${embedded ? ' home-hero--embedded' : ''}`.trim()}
+      style={embedded ? undefined : { backgroundImage: `url(${getHeroBackground(activeTab)})` }}
     >
-      <div className="home-hero-overlay" aria-hidden />
+      {!embedded && <div className="home-hero-overlay" aria-hidden />}
       <div className="container home-hero-inner">
         <div className="home-hero-content">
           <h1 className="home-hero-title">
@@ -177,10 +182,7 @@ export default function HomeHeroSearch({
 
           {(loadingLocalities || popularLocalities.length > 0) && (
             <div className="home-popular-localities">
-              <span className="home-popular-label">
-                <i className="bi bi-geo-alt" aria-hidden />
-                Popular Localities
-              </span>
+              <span className="home-popular-label">Popular Localities</span>
               {loadingLocalities ? (
                 <span className="home-popular-loading">Loading…</span>
               ) : (
@@ -215,7 +217,7 @@ export default function HomeHeroSearch({
 
           <div className="home-owner-banner">
             <span>✨ Are you a Property Owner?</span>
-            <Link to="/register?role=OWNER">Sell / Rent for FREE &gt;</Link>
+            <Link to="/register?role=OWNER">Sell / Rent for FREE</Link>
           </div>
         </div>
       </div>

@@ -3,7 +3,6 @@ import { useSelector } from 'react-redux';
 import { PANEL_HOME } from '../constants';
 
 export default function HousingHeaderRight({
-  isBuyerPanel = false,
   menuOpen = false,
   onMenuToggle,
 }) {
@@ -12,9 +11,7 @@ export default function HousingHeaderRight({
   const panelHome = user?.role?.code ? PANEL_HOME[user.role.code] : null;
   const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Login';
   const loginTarget = accessToken && panelHome ? panelHome : '/login';
-  const loginLabel = accessToken && panelHome && isBuyerPanel
-    ? displayName
-    : (accessToken && panelHome ? 'My panel' : 'Login');
+  const loginLabel = accessToken && panelHome ? displayName : 'Login';
 
   return (
     <div className="home-housing-actions">

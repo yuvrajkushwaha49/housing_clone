@@ -137,7 +137,27 @@ function mapProject(r) {
         }
       : null,
     primaryImage: r.primary_image ? `/uploads/${r.primary_image}` : null,
+    configLabel: buildProjectConfigLabel(r.bedroom_csv, r.sample_unit_type, r.category_name),
   };
+}
+
+function buildProjectConfigLabel(bedroomCsv, unitType, categoryName) {
+  const beds = String(bedroomCsv || '')
+    .split(',')
+    .map((b) => b.trim())
+    .filter((b) => b !== '');
+  const typeRaw = unitType || categoryName || 'Apartments';
+  const typeLabel = /villa/i.test(typeRaw)
+    ? 'Villas'
+    : /floor/i.test(typeRaw)
+      ? 'Builder Floors'
+      : /plot|land/i.test(typeRaw)
+        ? 'Plots'
+        : /apartment|flat|residential/i.test(typeRaw)
+          ? 'Apartments'
+          : typeRaw;
+  if (beds.length) return `${beds.join(', ')} BHK ${typeLabel}`;
+  return typeLabel;
 }
 
 const projectSelect = `
@@ -153,7 +173,13 @@ const projectSelect = `
   bp.uuid AS builder_uuid, bp.company_name, bp.rera_number AS builder_rera,
   (SELECT pm.file_path FROM project_media pm
     WHERE pm.project_id = p.id AND pm.deleted_at IS NULL AND pm.media_type = 'image'
-    ORDER BY pm.is_primary DESC, pm.sort_order ASC, pm.id ASC LIMIT 1) AS primary_image
+    ORDER BY pm.is_primary DESC, pm.sort_order ASC, pm.id ASC LIMIT 1) AS primary_image,
+  (SELECT GROUP_CONCAT(DISTINCT u.bedrooms ORDER BY u.bedrooms SEPARATOR ',')
+    FROM project_units u
+    WHERE u.project_id = p.id AND u.deleted_at IS NULL AND u.bedrooms IS NOT NULL) AS bedroom_csv,
+  (SELECT u.unit_type FROM project_units u
+    WHERE u.project_id = p.id AND u.deleted_at IS NULL AND u.unit_type IS NOT NULL
+    ORDER BY u.id ASC LIMIT 1) AS sample_unit_type
 `;
 
 async function getRawProject(uuid) {
@@ -779,7 +805,7 @@ export async function listProjects(filters = {}, user = null) {
      LEFT JOIN cities ci ON ci.id = p.city_id
      LEFT JOIN localities lo ON lo.id = p.locality_id
      WHERE ${where.join(' AND ')}
-     ORDER BY p.updated_at DESC
+     ORDER BY ${filters.sort === 'views' ? 'p.views_count DESC, p.updated_at DESC' : 'p.updated_at DESC'}
      LIMIT ${limit} OFFSET ${offset}`,
     params
   );

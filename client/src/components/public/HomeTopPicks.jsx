@@ -150,7 +150,7 @@ export default function HomeTopPicks({ cityId }) {
 
   return (
     <section className="home-top-picks" aria-label={`${APP_NAME} top picks`}>
-      <div className="container">
+      <div className="ml-75px">
         <div className="home-top-picks-head">
           <div>
             <h2 className="home-top-picks-title">{APP_NAME}&apos;s top picks</h2>

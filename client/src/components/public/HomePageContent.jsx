@@ -1,12 +1,17 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
-import HomeHeroSearch from './HomeHeroSearch';
+import HomeHeroSearch, { getHeroBackground } from './HomeHeroSearch';
 import HomeTopPicks from './HomeTopPicks';
 import HomeProminentProjects from './HomeProminentProjects';
+import HomeFeaturedDevelopers from './HomeFeaturedDevelopers';
+import HomeTrustedProjects from './HomeTrustedProjects';
+import HomeHighDemandProjects from './HomeHighDemandProjects';
+import HomeRecommendedSellers from './HomeRecommendedSellers';
 import HomeNewProperties from './HomeNewProperties';
 import HomeOtherLocationsFeed from './HomeOtherLocationsFeed';
+import HomeResearchTools from './HomeResearchTools';
 import { useHomeLocationsContext } from '../../contexts/HomeLocationsContext';
-import { cmsService } from '../../services';
+import { cmsService, mediaUrl } from '../../services';
 import {
   getCommercialCategoryId,
   getHomeMasters,
@@ -21,21 +26,21 @@ function buildFeatureCards(commercialCategoryId, plotTypeId, searchPath = '/sear
       desc: 'Apartments, villas & builder floors',
       icon: 'bi-house-heart',
       to: `${searchPath}?purpose=sale`,
-      accent: '#5d519b',
+      accent: '#5a2dcf',
     },
     {
       title: 'Rent a Home',
       desc: 'Verified owners & hassle-free search',
       icon: 'bi-key',
       to: `${searchPath}?purpose=rent`,
-      accent: '#433b6b',
+      accent: '#3f2799',
     },
     {
       title: 'PG & Co-living',
       desc: 'Budget-friendly shared spaces',
       icon: 'bi-people',
       to: `${searchPath}?purpose=pg`,
-      accent: '#7c6fc4',
+      accent: '#6d45d8',
     },
     {
       title: 'Commercial',
@@ -44,7 +49,7 @@ function buildFeatureCards(commercialCategoryId, plotTypeId, searchPath = '/sear
       to: commercialCategoryId
         ? `${searchPath}?purpose=sale&categoryId=${commercialCategoryId}`
         : `${searchPath}?purpose=sale`,
-      accent: '#2d235f',
+      accent: '#2a1a6e',
     },
     {
       title: 'Plots / Land',
@@ -53,14 +58,14 @@ function buildFeatureCards(commercialCategoryId, plotTypeId, searchPath = '/sear
       to: plotTypeId
         ? `${searchPath}?purpose=sale&propertyTypeId=${plotTypeId}`
         : `${searchPath}?purpose=sale`,
-      accent: '#6b5cae',
+      accent: '#4b28b5',
     },
     {
       title: 'Post Plot',
       desc: 'List your land for free',
       icon: 'bi-pin-map',
       to: '/register?role=OWNER',
-      accent: '#5a4f94',
+      accent: '#3a2088',
       badge: 'FREE',
     },
     {
@@ -114,6 +119,7 @@ export default function HomePageContent({
   searchPath = '/search',
   className = '',
   showHero = true,
+  header = null,
   cityId: cityIdProp,
   setCityId: setCityIdProp,
   cityName: cityNameProp,
@@ -168,23 +174,40 @@ export default function HomePageContent({
 
   return (
     <div className={className}>
-      {showHero && (
-        <HomeHeroSearch
-          cityId={cityId}
-          cityName={cityName}
-          cities={cities}
-          localities={localities}
-          loadingLocalities={loadingLocalities}
-          onCityChange={setCityId}
-          searchPath={searchPath}
-          activeTab={heroTab}
-          onTabChange={setHeroTab}
-        />
-      )}
+      {header}
+
+      {showHero ? (
+        <div
+          className="home-masthead"
+          style={{ backgroundImage: `url(${getHeroBackground(heroTab)})` }}
+        >
+          <div className="home-masthead-overlay" aria-hidden />
+          <HomeHeroSearch
+            cityId={cityId}
+            cityName={cityName}
+            cities={cities}
+            localities={localities}
+            loadingLocalities={loadingLocalities}
+            onCityChange={setCityId}
+            searchPath={searchPath}
+            activeTab={heroTab}
+            onTabChange={setHeroTab}
+            embedded
+          />
+        </div>
+      ) : null}
 
       {showProjects && <HomeTopPicks cityId={cityId} />}
 
       {showProjects && <HomeProminentProjects cityId={cityId} cityName={cityName} />}
+
+      {showProjects && <HomeFeaturedDevelopers cityId={cityId} />}
+
+      {showProjects && <HomeTrustedProjects cityId={cityId} />}
+
+      {showProjects && <HomeHighDemandProjects cityId={cityId} />}
+
+      {showProjects && <HomeRecommendedSellers cityId={cityId} />}
 
       <HomeNewProperties
         key={`hero-listings-${heroTab}-${cityId || 'all'}`}
@@ -214,6 +237,8 @@ export default function HomePageContent({
         />
       )}
 
+      <HomeResearchTools />
+
       <HomeOtherLocationsFeed
         cities={cities}
         currentCityId={cityId}
@@ -224,22 +249,20 @@ export default function HomePageContent({
 
       <section className="home-features">
         <div className="container">
-          <div className="home-section-head">
+          <div className="home-section-head home-section-head--left">
             <h2>We&apos;ve got properties for everyone</h2>
             <p>Whether you&apos;re buying, renting, or listing — start your journey with {cityName || 'us'}.</p>
           </div>
-          <div className="row g-3 g-md-4">
+          <div className="home-feature-grid">
             {featureCards.map((card) => (
-              <div className="col-6 col-md-4 col-lg-2" key={card.title}>
-                <Link to={card.to} className="home-feature-card text-decoration-none">
-                  <div className="home-feature-icon" style={{ background: card.accent }}>
-                    <i className={`bi ${card.icon}`} aria-hidden />
-                  </div>
-                  <h3>{card.title}</h3>
-                  <p>{card.desc}</p>
-                  {card.badge && <span className="home-feature-badge">{card.badge}</span>}
-                </Link>
-              </div>
+              <Link key={card.title} to={card.to} className="home-feature-card text-decoration-none">
+                <div className="home-feature-icon" style={{ background: card.accent }}>
+                  <i className={`bi ${card.icon}`} aria-hidden />
+                </div>
+                <h3>{card.title}</h3>
+                <p>{card.desc}</p>
+                {card.badge && <span className="home-feature-badge">{card.badge}</span>}
+              </Link>
             ))}
           </div>
         </div>
@@ -282,24 +305,34 @@ export default function HomePageContent({
       {blogs.length > 0 && (
         <section className="home-blog">
           <div className="container">
-            <div className="d-flex justify-content-between align-items-end mb-4">
+            <div className="home-prominent-head">
               <div>
-                <h2 className="home-section-head h4 mb-1">News &amp; Guides</h2>
-                <p className="text-secondary mb-0 small">Tips for buyers, sellers, and investors</p>
+                <h2>News &amp; Guides</h2>
+                <p>Tips for buyers, sellers, and investors</p>
               </div>
               <Link to="/blog" className="home-view-all">View all →</Link>
             </div>
             <div className="row g-3">
-              {blogs.map((b) => (
-                <div className="col-md-4" key={b.id}>
-                  <article className="home-blog-card">
-                    <h3>
-                      <Link to={`/blog/${b.slug}`}>{b.title}</Link>
-                    </h3>
-                    <p>{b.excerpt}</p>
-                  </article>
-                </div>
-              ))}
+              {blogs.map((b) => {
+                const cover = b.coverImage ? mediaUrl(b.coverImage) : null;
+                return (
+                  <div className="col-md-4" key={b.id}>
+                    <article className="home-blog-card">
+                      {cover && (
+                        <Link to={`/blog/${b.slug}`} className="home-blog-card-media">
+                          <img src={cover} alt="" loading="lazy" />
+                        </Link>
+                      )}
+                      <div className="home-blog-card-body">
+                        <h3>
+                          <Link to={`/blog/${b.slug}`}>{b.title}</Link>
+                        </h3>
+                        <p>{b.excerpt}</p>
+                      </div>
+                    </article>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>

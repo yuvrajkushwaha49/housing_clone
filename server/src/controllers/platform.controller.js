@@ -158,10 +158,15 @@ export const adminListBlogs = asyncHandler(async (req, res) => {
 });
 
 export const adminUpsertBlog = asyncHandler(async (req, res) => {
-  const data = await cmsService.upsertBlog(req.body, req.user, req, req.params.uuid);
+  const data = await cmsService.upsertBlog(req.body, req.user, req, req.params.uuid, req.file);
   return req.params.uuid
     ? ApiResponse.success(res, data, 'Blog updated')
     : ApiResponse.created(res, data, 'Blog created');
+});
+
+export const adminDeleteBlog = asyncHandler(async (req, res) => {
+  await cmsService.deleteBlog(req.params.uuid, req.user, req);
+  return ApiResponse.success(res, null, 'Blog deleted');
 });
 
 export const adminListNews = asyncHandler(async (req, res) => {
@@ -170,10 +175,15 @@ export const adminListNews = asyncHandler(async (req, res) => {
 });
 
 export const adminUpsertNews = asyncHandler(async (req, res) => {
-  const data = await cmsService.upsertNews(req.body, req.user, req, req.params.uuid);
+  const data = await cmsService.upsertNews(req.body, req.user, req, req.params.uuid, req.file);
   return req.params.uuid
     ? ApiResponse.success(res, data, 'News updated')
     : ApiResponse.created(res, data, 'News created');
+});
+
+export const adminDeleteNews = asyncHandler(async (req, res) => {
+  await cmsService.deleteNews(req.params.uuid, req.user, req);
+  return ApiResponse.success(res, null, 'News deleted');
 });
 
 export const adminListBanners = asyncHandler(async (req, res) => {

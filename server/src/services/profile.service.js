@@ -432,3 +432,70 @@ export async function reviewVerification(uuid, payload, actor, req) {
 
   return getVerificationByUuid(uuid);
 }
+
+/**
+ * Public home "Recommended sellers" — agents/owners with approved listings.
+ */
+export async function listRecommendedSellers({ limit = 8, cityId, includeContact = false } = {}) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 8, 1), 16);
+  const params = {};
+  const cityFilter = cityId
+    ? 'AND (ci.uuid = :cityId OR ap.city_id IN (SELECT id FROM cities WHERE uuid = :cityId AND deleted_at IS NULL))'
+    : '';
+  if (cityId) params.cityId = cityId;
+
+  const [rows] = await query(
+    `SELECT
+       u.uuid AS user_uuid,
+       u.first_name,
+       u.last_name,
+       u.phone,
+       r.code AS role_code,
+       ap.experience_years,
+       ap.agency_name,
+       COUNT(DISTINCT p.id) AS listing_count,
+       GROUP_CONCAT(DISTINCT lo.name ORDER BY lo.name SEPARATOR '||') AS localities
+     FROM users u
+     INNER JOIN roles r ON r.id = u.role_id AND r.code IN ('AGENT', 'OWNER') AND r.deleted_at IS NULL
+     LEFT JOIN agent_profiles ap ON ap.user_id = u.id AND ap.deleted_at IS NULL
+     INNER JOIN properties p ON p.listed_by_user_id = u.id
+       AND p.deleted_at IS NULL
+       AND p.status = 'approved'
+     LEFT JOIN cities ci ON ci.id = p.city_id
+     LEFT JOIN localities lo ON lo.id = p.locality_id
+     WHERE u.deleted_at IS NULL
+       ${cityFilter}
+     GROUP BY u.id, u.uuid, u.first_name, u.last_name, u.phone, r.code, ap.experience_years, ap.agency_name
+     HAVING listing_count > 0
+     ORDER BY listing_count DESC, ap.experience_years DESC
+     LIMIT ${safeLimit}`,
+    params
+  );
+
+  const accents = ['#5c4033', '#1e3a5f', '#3d3d3d', '#2f4f4f', '#4a2c6a', '#1a3c34'];
+
+  const items = rows.map((r, index) => {
+    const name = `${r.first_name || ''}${r.last_name ? ` ${r.last_name}` : ''}`.trim() || 'Seller';
+    const localities = String(r.localities || '')
+      .split('||')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    return {
+      id: r.user_uuid,
+      name,
+      role: r.role_code,
+      agencyName: r.agency_name || null,
+      experienceYears: r.experience_years != null ? Number(r.experience_years) : null,
+      listingCount: Number(r.listing_count || 0),
+      localities,
+      accent: accents[index % accents.length],
+      phone: includeContact ? r.phone || null : null,
+    };
+  });
+
+  return {
+    items,
+    meta: { page: 1, limit: safeLimit, total: items.length, totalPages: 1 },
+  };
+}

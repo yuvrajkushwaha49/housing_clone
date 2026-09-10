@@ -40,3 +40,12 @@ export const reviewVerification = asyncHandler(async (req, res) => {
   );
   return ApiResponse.success(res, data, 'Verification reviewed');
 });
+
+export const listRecommendedSellers = asyncHandler(async (req, res) => {
+  const result = await profileService.listRecommendedSellers({
+    limit: Number(req.query.limit || 8),
+    cityId: req.query.cityId || undefined,
+    includeContact: Boolean(req.user),
+  });
+  return ApiResponse.success(res, result.items, 'Recommended sellers', 200, result.meta);
+});

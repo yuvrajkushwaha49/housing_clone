@@ -26,7 +26,7 @@ function PropertyCard({ property, onSave }) {
   const saveLabel = isPlotProperty(property) ? 'Save plot' : 'Save property';
 
   return (
-    <article className="home-card-wrap">
+    <article className="home-card-wrap home-card-wrap-prominent">
       <button
         type="button"
         className="home-card-save-btn"
@@ -65,6 +65,7 @@ function PropertyCard({ property, onSave }) {
               <PropertyQualityBadge rating={property.reviewAverageRating} />
             </div>
           </div>
+          <span className="home-property-contact">Contact</span>
         </div>
       </Link>
     </article>
@@ -96,7 +97,7 @@ export default function HomeNewProperties({
   const defaultTitle = isPlotSection ? 'Plots' : 'Properties';
   const defaultSubtitle = isPlotSection
     ? `Residential and commercial plots${cityName ? ` in ${cityName}` : ''} — explore land listings today.`
-    : `Homes and apartments${cityName ? ` in ${cityName}` : ''} — fresh listings added recently.`;
+    : `Fresh listings to check out${cityName ? ` in ${cityName}` : ''}.`;
 
   useEffect(() => {
     setLoading(true);

@@ -136,6 +136,7 @@ router.post(
   '/cms/admin/blogs',
   authenticate,
   cmsRoles,
+  uploadSingle('coverImage'),
   body('title').trim().notEmpty(),
   body('body').trim().notEmpty(),
   validate,
@@ -145,15 +146,27 @@ router.put(
   '/cms/admin/blogs/:uuid',
   authenticate,
   cmsRoles,
+  uploadSingle('coverImage'),
   param('uuid').isUUID(),
+  body('title').trim().notEmpty(),
+  body('body').trim().notEmpty(),
   validate,
   ctrl.adminUpsertBlog
+);
+router.delete(
+  '/cms/admin/blogs/:uuid',
+  authenticate,
+  cmsRoles,
+  param('uuid').isUUID(),
+  validate,
+  ctrl.adminDeleteBlog
 );
 router.get('/cms/admin/news', authenticate, cmsRoles, ctrl.adminListNews);
 router.post(
   '/cms/admin/news',
   authenticate,
   cmsRoles,
+  uploadSingle('coverImage'),
   body('title').trim().notEmpty(),
   body('body').trim().notEmpty(),
   validate,
@@ -163,9 +176,20 @@ router.put(
   '/cms/admin/news/:uuid',
   authenticate,
   cmsRoles,
+  uploadSingle('coverImage'),
   param('uuid').isUUID(),
+  body('title').trim().notEmpty(),
+  body('body').trim().notEmpty(),
   validate,
   ctrl.adminUpsertNews
+);
+router.delete(
+  '/cms/admin/news/:uuid',
+  authenticate,
+  cmsRoles,
+  param('uuid').isUUID(),
+  validate,
+  ctrl.adminDeleteNews
 );
 router.get('/cms/admin/banners', authenticate, cmsRoles, ctrl.adminListBanners);
 router.post(

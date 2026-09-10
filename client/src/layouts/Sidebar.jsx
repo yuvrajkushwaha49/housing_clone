@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { APP_NAME, BRAND_INITIAL, NAV_BY_ROLE } from '../constants';
+import { APP_NAME, NAV_BY_ROLE } from '../constants';
 import { setSidebarMobileOpen } from '../redux/slices/uiSlice';
 import { leadService, settingsService } from '../services';
 import { phoneToTelHref } from '../utils/contactLinks';
+import { BrandIcon, BrandLogo } from '../components/BrandAssets';
 
 const DEFAULT_SUPPORT_PHONE = '+91 89896 06060';
 
@@ -54,10 +55,13 @@ export default function Sidebar() {
       <aside
         className={`app-sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${sidebarMobileOpen ? 'open' : ''}`}
       >
-        <div className="sidebar-brand">
-          <span className="brand-mark">{BRAND_INITIAL}</span>
-          {!sidebarCollapsed && <span className="brand-text">{APP_NAME}</span>}
-        </div>
+        {/* <div className="sidebar-brand">
+          {sidebarCollapsed ? (
+            <BrandIcon className="brand-icon--sidebar" alt={APP_NAME} />
+          ) : (
+            <BrandLogo className="brand-logo--sidebar" />
+          )}
+        </div> */}
         <nav className="sidebar-nav">
           {items.map((item) => {
             const isApprovals = item.path.endsWith('/approvals');

@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { body, param } from 'express-validator';
 import * as ctrl from '../controllers/profile.controller.js';
-import { authenticate, authorize, authorizeRoles } from '../middlewares/authenticate.js';
+import { authenticate, authorize, authorizeRoles, optionalAuthenticate } from '../middlewares/authenticate.js';
 import { validate } from '../validators/auth.validator.js';
 
 const router = Router();
+
+router.get('/sellers/recommended', optionalAuthenticate, ctrl.listRecommendedSellers);
 
 router.get(
   '/profiles/me',

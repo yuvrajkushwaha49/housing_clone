@@ -1,20 +1,67 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import PublicSiteHeader from '../../components/public/PublicSiteHeader';
 import PublicSiteFooter from '../../components/public/PublicSiteFooter';
-import PropertyDetailSkeleton from '../../components/public/PropertyDetailSkeleton';
+import ProjectDetailSkeleton from '../../components/public/ProjectDetailSkeleton';
+import PropertyDetailBody from '../../components/public/PropertyDetailBody';
 import AppModal from '../../components/public/AppModal';
 import { BuyerAuthPrompt, useBuyerAccess } from '../../components/public/BuyerAuthGate';
 import PropertyNearbySection from '../../components/public/PropertyNearbySection';
 import PropertyNearbyProjectsSection from '../../components/public/PropertyNearbyProjectsSection';
 import HomeProminentProjects from '../../components/public/HomeProminentProjects';
 import HomeNewProperties from '../../components/public/HomeNewProperties';
-import { chatService, leadService, mastersService, mediaUrl, propertyService, reviewService, reportService } from '../../services';
-import { PANEL_HOME } from '../../constants';
 import PropertyQualityBadge from '../../components/properties/PropertyQualityBadge';
-import { formatPlotAmenityLabel, isPlotProperty } from '../../components/properties/propertyUtils';
+import {
+  formatPropertyPurpose,
+  isPlotProperty,
+} from '../../components/properties/propertyUtils';
+import {
+  formatPriceCompact,
+  formatShortLocation,
+} from '../../components/projects/projectUtils';
+import {
+  chatService,
+  leadService,
+  mastersService,
+  mediaUrl,
+  propertyService,
+  reviewService,
+  reportService,
+} from '../../services';
+import { PANEL_HOME } from '../../constants';
 import { useToast } from '../../hooks/useToast';
+
+function estimateEmi(price) {
+  if (price == null) return null;
+  const principal = Number(price) * 0.8;
+  const monthlyRate = 0.085 / 12;
+  const months = 240;
+  const emi = (principal * monthlyRate * ((1 + monthlyRate) ** months))
+    / (((1 + monthlyRate) ** months) - 1);
+  if (!Number.isFinite(emi)) return null;
+  if (emi >= 100000) return `₹${(emi / 100000).toFixed(2)} L`;
+  if (emi >= 1000) return `₹${(emi / 1000).toFixed(2)} K`;
+  return `₹${Math.round(emi).toLocaleString('en-IN')}`;
+}
+
+function formatAvgPricePerSqft(price, area) {
+  const p = Number(price);
+  const a = Number(area);
+  if (!p || !a) return null;
+  const n = p / a;
+  if (n >= 1000) {
+    return `₹${(n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, '')} K/sq.ft`;
+  }
+  return `₹${Math.round(n).toLocaleString('en-IN')}/sq.ft`;
+}
+
+function formatUpdatedAt(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 export default function PropertyDetailPage() {
   const toast = useToast();
@@ -33,6 +80,8 @@ export default function PropertyDetailPage() {
   const [authActionLabel, setAuthActionLabel] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [plotTypeId, setPlotTypeId] = useState('');
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [activeImage, setActiveImage] = useState(0);
 
   const inquiryForm = useForm({
     defaultValues: { name: '', email: '', phone: '', message: '' },
@@ -50,10 +99,13 @@ export default function PropertyDetailPage() {
   };
 
   useEffect(() => {
+    setLoading(true);
+    setLoadFailed(false);
     propertyService
       .getBySlug(slug)
       .then(async (res) => {
         setProperty(res.data.data);
+        setActiveImage(0);
         try {
           await loadReviews(res.data.data.id);
         } catch {
@@ -88,6 +140,11 @@ export default function PropertyDetailPage() {
       visitForm.setValue('phone', user.phone || '');
     }
   }, [user, inquiryForm, visitForm]);
+
+  const images = useMemo(
+    () => property?.media?.filter((m) => m.mediaType === 'image') || [],
+    [property]
+  );
 
   const closeModal = () => {
     setActiveModal(null);
@@ -164,6 +221,7 @@ export default function PropertyDetailPage() {
     try {
       await leadService.createInquiry({
         ...values,
+        message: values.message?.trim() || undefined,
         phone: values.phone?.trim() || user?.phone || undefined,
         propertyId: property.id,
       });
@@ -243,22 +301,41 @@ export default function PropertyDetailPage() {
     }
   };
 
+  const shareProperty = async () => {
+    const url = window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: property.title, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied');
+    } catch {
+      toast.info('Unable to share right now');
+    }
+  };
+
+  const openGallery = (index = 0) => {
+    setActiveImage(index);
+    setLightboxOpen(true);
+  };
+
   if (loading) {
     return (
-      <div className="property-detail-page">
+      <div className="project-detail-page project-detail-page--housing property-detail-page">
         <PublicSiteHeader active="/search" />
-        <PropertyDetailSkeleton />
+        <ProjectDetailSkeleton />
         <PublicSiteFooter />
       </div>
     );
   }
 
-  if (loadFailed) {
+  if (loadFailed || !property) {
     return (
-      <div className="property-detail-page">
+      <div className="project-detail-page project-detail-page--housing property-detail-page">
         <PublicSiteHeader active="/search" />
         <div className="container py-5">
-          <div className="panel-card text-center py-5">
+          <div className="project-detail-empty panel-card text-center py-5">
             <i className="bi bi-house-x display-4 text-secondary mb-3 d-block" />
             <h1 className="h4">Property not found</h1>
             <p className="text-secondary mb-4">This listing may be unavailable or removed.</p>
@@ -270,9 +347,20 @@ export default function PropertyDetailPage() {
     );
   }
 
-  const images = property.media?.filter((m) => m.mediaType === 'image') || [];
   const isOwnListing = user && property.listedBy?.id === user.id;
   const isPlot = isPlotProperty(property);
+  const shortLocation = formatShortLocation(property);
+  const priceCompact = formatPriceCompact(property.price, null).replace(/^From\s+/, '');
+  const avgPrice = formatAvgPricePerSqft(property.price, property.area);
+  const emiLabel = estimateEmi(property.price);
+  const updatedAt = formatUpdatedAt(property.publishedAt || property.updatedAt);
+  const moreCount = Math.max(images.length - 3, 0);
+  const areaLabel = [property.area, property.areaUnit?.name].filter(Boolean).join(' ') || '—';
+  const configLabel = isPlot
+    ? (property.propertyType?.name || 'Plot')
+    : property.bedrooms != null
+      ? `${property.bedrooms} BHK`
+      : (property.propertyType?.name || '—');
   const plotSearchUrl = plotTypeId
     ? `/search?purpose=sale&propertyTypeId=${encodeURIComponent(plotTypeId)}${
       property.city?.id ? `&cityId=${encodeURIComponent(property.city.id)}` : ''
@@ -280,198 +368,200 @@ export default function PropertyDetailPage() {
     : '/search?purpose=sale';
 
   return (
-    <div className="property-detail-page">
+    <div className="project-detail-page project-detail-page--housing property-detail-page">
       <PublicSiteHeader active="/search" />
-      <div className="container py-4">
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <Link to="/search" className="btn btn-sm btn-outline-secondary">← Search</Link>
-          <div className="d-flex gap-2 flex-wrap justify-content-end">
-            {!isOwnListing && (
-              <button type="button" className="btn btn-sm btn-primary" disabled={chatBusy} onClick={startChat}>
-                Chat with lister
-              </button>
+
+      <div className="project-detail-top-band">
+        <div className="container project-detail-top">
+          <div className="project-detail-crumb-row">
+            <nav aria-label="breadcrumb">
+              <ol className="breadcrumb project-detail-breadcrumb mb-0">
+                <li className="breadcrumb-item"><Link to="/">Home</Link></li>
+                <li className="breadcrumb-item"><Link to="/search">Search</Link></li>
+                {property.city?.name && (
+                  <li className="breadcrumb-item">
+                    <Link to={`/search?cityId=${encodeURIComponent(property.city.id)}`}>
+                      {property.city.name}
+                    </Link>
+                  </li>
+                )}
+                {property.locality?.name && (
+                  <li className="breadcrumb-item">{property.locality.name}</li>
+                )}
+                <li className="breadcrumb-item active" aria-current="page">{property.title}</li>
+              </ol>
+            </nav>
+            {updatedAt && (
+              <div className="project-detail-updated">
+                Last updated: {updatedAt}
+                <i className="bi bi-info-circle" aria-hidden />
+              </div>
             )}
-            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={compareBusy} onClick={toggleCompare}>
-              Compare
-            </button>
-            <button type="button" className="btn btn-sm btn-outline-primary" onClick={save}>
-              Save
-            </button>
           </div>
-        </div>
 
-        <div className="row g-4">
-          <div className="col-lg-8">
-            <div className="panel-card mb-3">
-              <div
-                className="property-detail-hero-image"
-                style={{
-                  background: images[0]
-                    ? `center/cover url(${mediaUrl(images[0].url)})`
-                    : 'linear-gradient(135deg,#2d235f,#5d519b)',
-                }}
-              />
-              {images.length > 1 && (
-                <div className="d-flex gap-2 mt-2 overflow-auto">
-                  {images.slice(1).map((img) => (
-                    <img key={img.id} src={mediaUrl(img.url)} alt="" height={72} style={{ borderRadius: 8 }} />
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="panel-card mb-3">
-              <h1 className="h3">{property.title}</h1>
-              <p className="text-secondary">
-                {property.locality?.name ? `${property.locality.name}, ` : ''}
-                {property.city?.name}, {property.state?.name}
-              </p>
-              <p style={{ whiteSpace: 'pre-wrap' }}>{property.description}</p>
-            </div>
-            <div className="panel-card mb-3">
-              <h2 className="h6">{isPlotProperty(property) ? 'Plot amenities' : 'Amenities'}</h2>
-              {isPlotProperty(property) ? (
-                <div className="row g-3">
-                  {Object.entries(property.plotAmenities || {}).filter(([, value]) => value).length > 0 ? (
-                    Object.entries(property.plotAmenities)
-                      .filter(([, value]) => value)
-                      .map(([key, value]) => (
-                        <div key={key} className="col-md-6">
-                          <div className="small text-secondary">{formatPlotAmenityLabel(key)}</div>
-                          <div className="fw-medium">{value}</div>
-                        </div>
-                      ))
-                  ) : (
-                    <div className="col-12 text-secondary">No plot amenities listed</div>
-                  )}
-                </div>
-              ) : (
-                <div className="d-flex flex-wrap gap-2">
-                  {property.amenities?.map((a) => (
-                    <span key={a.id} className="badge text-bg-light border">{a.name}</span>
-                  ))}
-                  {!property.amenities?.length && <span className="text-secondary">No amenities listed</span>}
-                </div>
-              )}
-            </div>
-
-            <div className="panel-card">
-              <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                <div>
-                  <h2 className="h6 mb-1">Reviews</h2>
-                  <span className="small text-secondary">
-                    {reviews.averageRating ? `${reviews.averageRating} ★` : 'No ratings'} · {reviews.total} approved
+          <div className="project-detail-header">
+            <div className="project-detail-header-main">
+              <h1 className="project-detail-title">{property.title}</h1>
+              {property.listedBy?.name && (
+                <p className="project-detail-by">
+                  By{' '}
+                  <span className="project-detail-builder-link">
+                    {property.listedBy.name}
                   </span>
-                </div>
-                {!isOwnListing && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline-primary"
-                    onClick={() => openBuyerModal('review', 'write a review')}
-                  >
-                    <i className="bi bi-pencil-square me-1" aria-hidden />
-                    Write a review
-                  </button>
+                  {property.listedByType && (
+                    <span className="text-secondary text-capitalize">
+                      {' '}
+                      · {String(property.listedByType).replace(/_/g, ' ')}
+                    </span>
+                  )}
+                </p>
+              )}
+              {shortLocation !== '—' && (
+                <p className="project-detail-location-line">{shortLocation}</p>
+              )}
+              <div className="d-flex flex-wrap gap-2 align-items-center">
+                <span className="project-detail-rate-pill">
+                  <i className="bi bi-tag me-1" aria-hidden />
+                  {formatPropertyPurpose(property.purpose)}
+                </span>
+                {property.reviewAverageRating != null && (
+                  <PropertyQualityBadge rating={property.reviewAverageRating} />
                 )}
               </div>
-              {reviews.items.map((r) => (
-                <div key={r.id} className="border-bottom py-3">
-                  <div className="d-flex justify-content-between">
-                    <strong>{r.user.name}</strong>
-                    <span className="text-warning small">{'★'.repeat(r.rating)}</span>
-                  </div>
-                  {r.title && <div className="fw-semibold">{r.title}</div>}
-                  <p className="mb-0 small">{r.body}</p>
-                </div>
-              ))}
-              {!reviews.items.length && (
-                <div className="text-secondary small">No reviews yet. Be the first to share your experience.</div>
+            </div>
+
+            <div className="project-detail-header-price">
+              <div className="project-detail-price-row">
+                <span className="project-detail-price-main">{priceCompact}</span>
+                {avgPrice && (
+                  <span className="project-detail-price-avg">| {avgPrice}</span>
+                )}
+              </div>
+              {emiLabel && (
+                <div className="project-detail-emi">EMI starts at {emiLabel}</div>
+              )}
+              <div className="project-detail-price-note">
+                {isPlot ? 'Plot price' : 'All inclusive Price'}
+              </div>
+              {!isOwnListing && (
+                <button
+                  type="button"
+                  className="project-detail-contact-btn"
+                  onClick={() => openBuyerModal('inquiry', 'send an inquiry')}
+                >
+                  <i className="bi bi-telephone-fill" aria-hidden />
+                  Contact Sellers
+                </button>
               )}
             </div>
           </div>
 
-          <div className="col-lg-4">
-            <div className="panel-card mb-3">
-              <div className="display-6 fw-semibold mb-2">
-                ₹{Number(property.price).toLocaleString('en-IN')}
-              </div>
-              {property.reviewAverageRating != null && (
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <PropertyQualityBadge rating={property.reviewAverageRating} />
-                  <span className="small text-secondary">Admin verified quality</span>
-                </div>
-              )}
-              <div className="mb-3 text-secondary">{property.purpose.toUpperCase()}</div>
-              <ul className="list-unstyled small mb-3">
-                <li className="mb-1"><strong>Type:</strong> {property.propertyType?.name}</li>
-                <li className="mb-1"><strong>{isPlot ? 'Plot area' : 'Area'}:</strong> {property.area} {property.areaUnit?.name}</li>
-                {!isPlot && (
-                  <li className="mb-1"><strong>Beds / Baths:</strong> {property.bedrooms ?? '—'} / {property.bathrooms ?? '—'}</li>
+          <div className="project-detail-gallery-grid">
+            <div className="project-detail-gallery-main-tile">
+              <button
+                type="button"
+                className="project-detail-gallery-open"
+                onClick={() => openGallery(0)}
+                aria-label="Open cover image"
+              >
+                {images[0] ? (
+                  <img src={mediaUrl(images[0].url)} alt={images[0].caption || property.title} />
+                ) : (
+                  <div className="project-detail-gallery-placeholder">
+                    <i className="bi bi-house" />
+                  </div>
                 )}
-                {isPlot && property.facing?.name && (
-                  <li className="mb-1"><strong>Facing:</strong> {property.facing.name}</li>
-                )}
-                {isPlot && property.ownership?.name && (
-                  <li className="mb-1"><strong>Ownership:</strong> {property.ownership.name}</li>
-                )}
-                <li className="mb-1"><strong>Views:</strong> {property.viewsCount}</li>
-              </ul>
-              <div className="border-top pt-3">
-                <div className="fw-semibold">{property.listedBy?.name}</div>
-                <div className="small text-secondary text-capitalize">{property.listedByType}</div>
+              </button>
+              <span className="project-detail-cover-badge">Cover Image</span>
+              <div className="project-detail-gallery-actions">
+                <button type="button" className="project-detail-gallery-action" onClick={shareProperty}>
+                  <i className="bi bi-share" aria-hidden />
+                  SHARE
+                </button>
+                <button type="button" className="project-detail-gallery-action" onClick={save}>
+                  <i className="bi bi-heart" aria-hidden />
+                  SAVE
+                </button>
               </div>
             </div>
 
-            {!isOwnListing && (
-              <div className="panel-card mb-3">
-                <h2 className="h6">Interested in this property?</h2>
-                <p className="small text-secondary mb-3">
-                  Contact the lister or schedule a visit at your convenience.
-                </p>
-                <div className="d-grid gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => openBuyerModal('inquiry', 'send an inquiry')}
-                  >
-                    <i className="bi bi-envelope me-1" aria-hidden />
-                    Send inquiry
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-primary"
-                    onClick={() => openBuyerModal('visit', 'book a site visit')}
-                  >
-                    <i className="bi bi-calendar-check me-1" aria-hidden />
-                    Book site visit
-                  </button>
-                </div>
-              </div>
-            )}
+            <div className="project-detail-gallery-side">
+              <button
+                type="button"
+                className="project-detail-gallery-side-tile"
+                onClick={() => openGallery(1)}
+              >
+                {images[1] ? (
+                  <img src={mediaUrl(images[1].url)} alt={images[1].caption || ''} />
+                ) : (
+                  <div className="project-detail-gallery-placeholder is-side">
+                    <i className="bi bi-image" />
+                  </div>
+                )}
+              </button>
+              <button
+                type="button"
+                className="project-detail-gallery-side-tile"
+                onClick={() => openGallery(images.length > 2 ? 2 : 0)}
+              >
+                {images[2] ? (
+                  <img src={mediaUrl(images[2].url)} alt={images[2].caption || ''} />
+                ) : images[0] ? (
+                  <img src={mediaUrl(images[0].url)} alt="" />
+                ) : (
+                  <div className="project-detail-gallery-placeholder is-side">
+                    <i className="bi bi-image" />
+                  </div>
+                )}
+                {moreCount > 0 && (
+                  <span className="project-detail-more-overlay">+ {moreCount} more</span>
+                )}
+              </button>
+            </div>
+          </div>
 
-            <div className="panel-card">
-              <h2 className="h6">Report listing</h2>
-              <form onSubmit={submitReport}>
-                <select className="form-select form-select-sm mb-2" value={reportReason} onChange={(e) => setReportReason(e.target.value)}>
-                  <option value="spam">Spam</option>
-                  <option value="fraud">Fraud</option>
-                  <option value="incorrect">Incorrect info</option>
-                  <option value="duplicate">Duplicate</option>
-                  <option value="offensive">Offensive</option>
-                  <option value="other">Other</option>
-                </select>
-                <textarea
-                  className="form-control form-control-sm mb-2"
-                  rows={2}
-                  placeholder="Details (optional)"
-                  value={reportDetails}
-                  onChange={(e) => setReportDetails(e.target.value)}
-                />
-                <button type="submit" className="btn btn-outline-danger btn-sm w-100">Submit report</button>
-              </form>
+          <div className="project-detail-highlights-bar">
+            <div className="project-detail-highlight-item">
+              <strong>{configLabel}</strong>
+              <span>{isPlot ? 'Property type' : 'Configuration'}</span>
+            </div>
+            <div className="project-detail-highlight-item">
+              <strong>{formatPropertyPurpose(property.purpose)}</strong>
+              <span>Purpose</span>
+            </div>
+            <div className="project-detail-highlight-item">
+              <strong>{avgPrice || '—'}</strong>
+              <span>Avg. Price</span>
+            </div>
+            <div className="project-detail-highlight-item">
+              <strong>{areaLabel}</strong>
+              <span>{isPlot ? 'Plot size' : 'Size'}</span>
             </div>
           </div>
         </div>
       </div>
+
+      <PropertyDetailBody
+        property={property}
+        images={images}
+        reviews={reviews}
+        isOwnListing={isOwnListing}
+        onShare={shareProperty}
+        onOpenGallery={openGallery}
+        onSave={save}
+        onChat={startChat}
+        onCompare={toggleCompare}
+        onInquiry={() => openBuyerModal('inquiry', 'send an inquiry')}
+        onVisit={() => openBuyerModal('visit', 'book a site visit')}
+        onReview={() => openBuyerModal('review', 'write a review')}
+        chatBusy={chatBusy}
+        compareBusy={compareBusy}
+        reportReason={reportReason}
+        setReportReason={setReportReason}
+        reportDetails={reportDetails}
+        setReportDetails={setReportDetails}
+        onReport={submitReport}
+      />
 
       <PropertyNearbySection property={property} />
       <PropertyNearbyProjectsSection property={property} />
@@ -499,6 +589,47 @@ export default function PropertyDetailPage() {
           />
         )}
       </div>
+
+      {lightboxOpen && images.length > 0 && (
+        <div className="project-detail-lightbox" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="project-detail-lightbox-close"
+            onClick={() => setLightboxOpen(false)}
+            aria-label="Close gallery"
+          >
+            <i className="bi bi-x-lg" />
+          </button>
+          {images.length > 1 && (
+            <>
+              <button
+                type="button"
+                className="project-detail-lightbox-nav is-prev"
+                onClick={() => setActiveImage((i) => (i - 1 + images.length) % images.length)}
+                aria-label="Previous image"
+              >
+                <i className="bi bi-chevron-left" />
+              </button>
+              <button
+                type="button"
+                className="project-detail-lightbox-nav is-next"
+                onClick={() => setActiveImage((i) => (i + 1) % images.length)}
+                aria-label="Next image"
+              >
+                <i className="bi bi-chevron-right" />
+              </button>
+            </>
+          )}
+          <img
+            src={mediaUrl(images[activeImage].url)}
+            alt={images[activeImage].caption || property.title}
+            className="project-detail-lightbox-image"
+          />
+          <div className="project-detail-lightbox-count">
+            {activeImage + 1} / {images.length}
+          </div>
+        </div>
+      )}
 
       {activeModal === 'auth' && (
         <AppModal title="Buyer sign in required" onClose={closeModal}>
@@ -533,8 +664,8 @@ export default function PropertyDetailPage() {
             <textarea
               className="form-control"
               rows={4}
-              placeholder="Your message (min 10 characters)"
-              {...inquiryForm.register('message', { required: true, minLength: 10 })}
+              placeholder="Message (optional)"
+              {...inquiryForm.register('message')}
             />
           </form>
         </AppModal>

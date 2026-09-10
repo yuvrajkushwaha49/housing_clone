@@ -5,7 +5,7 @@ export { validate };
 
 export const inquiryRules = [
   body('propertyId').isUUID().withMessage('propertyId required'),
-  body('message').trim().isLength({ min: 10, max: 2000 }).withMessage('Message min 10 chars'),
+  body('message').optional({ nullable: true, checkFalsy: true }).trim().isLength({ max: 2000 }),
   body('name').optional({ nullable: true }).trim().isLength({ max: 150 }),
   body('email').optional({ nullable: true }).isEmail().normalizeEmail(),
   body('phone').optional({ nullable: true }).trim().isLength({ min: 8, max: 20 }).withMessage('Phone must be 8-20 characters'),
