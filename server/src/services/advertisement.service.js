@@ -2,14 +2,14 @@ import { query } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import { generateUuid } from '../helpers/crypto.helper.js';
 import { writeAuditLog } from '../helpers/audit.helper.js';
-import { deleteStoredFile, storeUpload } from '../helpers/storage.helper.js';
+import { deleteStoredFile, mediaUrl, storeUpload } from '../helpers/storage.helper.js';
 
 function mapAd(r) {
   return {
     id: r.uuid,
     title: r.title,
     placement: r.placement,
-    imageUrl: r.image_path ? `/uploads/${r.image_path}` : null,
+    imageUrl: mediaUrl(r.image_path),
     linkUrl: r.link_url,
     startsAt: r.starts_at,
     endsAt: r.ends_at,

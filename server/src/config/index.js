@@ -46,6 +46,16 @@ const config = {
     from: process.env.MAIL_FROM || 'Workians <noreply@hous.local>',
   },
   uploadDir: path.resolve(serverRoot, process.env.UPLOAD_DIR || '../uploads'),
+  storage: {
+    driver: (process.env.STORAGE_DRIVER || 'local').toLowerCase(),
+    s3: {
+      region: process.env.AWS_REGION || 'ap-south-1',
+      bucket: process.env.S3_BUCKET || '',
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+      publicBaseUrl: (process.env.S3_PUBLIC_BASE_URL || '').replace(/\/$/, ''),
+    },
+  },
   rateLimit: {
     windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
     max: Number(process.env.RATE_LIMIT_MAX || 200),

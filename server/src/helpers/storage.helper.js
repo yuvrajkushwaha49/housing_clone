@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { generateUuid } from './crypto.helper.js';
 import config from '../config/index.js';
 import ApiError from '../utils/ApiError.js';
@@ -25,10 +26,81 @@ const DOC_MIME = new Set([
 ]);
 const VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 
+let s3Client;
+
+function useS3() {
+  return config.storage.driver === 's3';
+}
+
+function getS3() {
+  if (!s3Client) {
+    const { region, accessKeyId, secretAccessKey, bucket } = config.storage.s3;
+    if (!bucket || !accessKeyId || !secretAccessKey) {
+      throw new ApiError(500, 'S3 storage is not configured (S3_BUCKET / AWS keys)');
+    }
+    s3Client = new S3Client({
+      region,
+      credentials: { accessKeyId, secretAccessKey },
+    });
+  }
+  return s3Client;
+}
+
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
+}
+
+/** Normalize DB path / URL to relative key like properties/x.webp */
+export function normalizeUploadKey(input) {
+  if (!input) return '';
+  let key = String(input).trim();
+  if (/^https?:\/\//i.test(key)) {
+    try {
+      const u = new URL(key);
+      key = u.pathname.replace(/^\/+/, '');
+    } catch {
+      return '';
+    }
+  }
+  key = key.replace(/^\/+/, '');
+  if (key.startsWith('uploads/')) key = key.slice('uploads/'.length);
+  return key;
+}
+
+/** Public URL for a stored relative path (local /uploads or S3/CloudFront). */
+export function mediaUrl(relativePath) {
+  if (!relativePath) return null;
+  const raw = String(relativePath).trim();
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const key = normalizeUploadKey(raw);
+  if (!key) return null;
+  if (useS3()) {
+    const base = config.storage.s3.publicBaseUrl
+      || `https://${config.storage.s3.bucket}.s3.${config.storage.s3.region}.amazonaws.com`;
+    return `${base}/${key}`;
+  }
+  return `/uploads/${key}`;
+}
+
+async function persistBuffer(relativePath, buffer, contentType) {
+  if (useS3()) {
+    const { bucket } = config.storage.s3;
+    await getS3().send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: relativePath,
+        Body: buffer,
+        ContentType: contentType,
+        CacheControl: 'public, max-age=604800',
+      }),
+    );
+    return;
+  }
+  const destDir = path.join(config.uploadDir, path.dirname(relativePath));
+  ensureDir(destDir);
+  await fs.promises.writeFile(path.join(config.uploadDir, relativePath), buffer);
 }
 
 export function normalizeImageMime(mimetype, originalname = '') {
@@ -89,20 +161,18 @@ async function resolveProjectImageMime(file) {
 
 /**
  * Persist an uploaded file. Images are optimized with Sharp.
- * Returns relative web path under /uploads.
+ * Returns relative path for DB + public url (local or S3).
  */
 export async function storeUpload(file, { folder = 'properties', mediaType = 'image' } = {}) {
   if (!file) {
     throw new ApiError(400, 'File is required');
   }
 
-  const destDir = path.join(config.uploadDir, folder);
-  ensureDir(destDir);
-
   const base = `${Date.now()}-${generateUuid()}`;
   let filename;
   let mimeType = file.mimetype;
   let size = file.size;
+  let body = file.buffer;
 
   const wantsImage = mediaType === 'image';
 
@@ -112,44 +182,58 @@ export async function storeUpload(file, { folder = 'properties', mediaType = 'im
       throw new ApiError(400, 'Invalid image type. Only JPEG, PNG, and JPG are allowed.');
     }
     filename = `${base}.webp`;
-    const outPath = path.join(destDir, filename);
-    const optimized = await sharp(file.buffer)
+    body = await sharp(file.buffer)
       .rotate()
       .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
       .webp({ quality: 82 })
       .toBuffer();
-    await fs.promises.writeFile(outPath, optimized);
     mimeType = 'image/webp';
-    size = optimized.length;
+    size = body.length;
   } else if (mediaType === 'video') {
     if (!VIDEO_MIME.has(file.mimetype)) {
       throw new ApiError(400, 'Invalid video type. Allowed: MP4, WebM, MOV');
     }
     const ext = path.extname(file.originalname) || '.mp4';
     filename = `${base}${ext}`;
-    await fs.promises.writeFile(path.join(destDir, filename), file.buffer);
   } else {
     if (!DOC_MIME.has(file.mimetype) && !IMAGE_MIME.has(normalizeImageMime(file.mimetype, file.originalname))) {
       throw new ApiError(400, 'Invalid document type');
     }
     const ext = path.extname(file.originalname) || '';
     filename = `${base}${ext}`;
-    await fs.promises.writeFile(path.join(destDir, filename), file.buffer);
   }
 
   const relativePath = path.posix.join(folder, filename);
+  await persistBuffer(relativePath, body, mimeType);
+
   return {
     filePath: relativePath,
     fileName: file.originalname,
     mimeType,
     fileSize: size,
-    url: `/uploads/${relativePath}`,
+    url: mediaUrl(relativePath),
   };
 }
 
 export async function deleteStoredFile(relativePath) {
-  if (!relativePath) return;
-  const abs = path.join(config.uploadDir, relativePath);
+  const key = normalizeUploadKey(relativePath);
+  if (!key) return;
+
+  if (useS3()) {
+    try {
+      await getS3().send(
+        new DeleteObjectCommand({
+          Bucket: config.storage.s3.bucket,
+          Key: key,
+        }),
+      );
+    } catch {
+      // ignore missing / permission race
+    }
+    return;
+  }
+
+  const abs = path.join(config.uploadDir, key);
   if (fs.existsSync(abs)) {
     await fs.promises.unlink(abs);
   }

@@ -1,7 +1,7 @@
 import { query, withTransaction } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import { generateUuid } from '../helpers/crypto.helper.js';
-import { deleteStoredFile, isProjectImageFile, slugify, storeUpload } from '../helpers/storage.helper.js';
+import { deleteStoredFile, isProjectImageFile, mediaUrl, slugify, storeUpload } from '../helpers/storage.helper.js';
 import { writeAuditLog } from '../helpers/audit.helper.js';
 import { notifyUser } from '../helpers/notification.helper.js';
 import * as builderService from './builder.service.js';
@@ -112,7 +112,7 @@ function mapProject(r) {
     addressLine: r.address_line,
     latitude: r.latitude,
     longitude: r.longitude,
-    brochureUrl: r.brochure_path ? `/uploads/${r.brochure_path}` : null,
+    brochureUrl: mediaUrl(r.brochure_path),
     viewsCount: r.views_count,
     publishedAt: r.published_at,
     metaTitle: r.meta_title,
@@ -136,7 +136,7 @@ function mapProject(r) {
           reraNumber: r.builder_rera,
         }
       : null,
-    primaryImage: r.primary_image ? `/uploads/${r.primary_image}` : null,
+    primaryImage: mediaUrl(r.primary_image),
     configLabel: buildProjectConfigLabel(r.bedroom_csv, r.sample_unit_type, r.category_name),
   };
 }
@@ -623,8 +623,8 @@ export async function getProjectByUuid(uuid, { includePrivate = false, increment
       icon: a.icon,
       category: a.category,
       isSelected,
-      imageUrl: projectImagePath ? `/uploads/${projectImagePath}` : null,
-      projectImageUrl: projectImagePath ? `/uploads/${projectImagePath}` : null,
+      imageUrl: mediaUrl(projectImagePath),
+      projectImageUrl: mediaUrl(projectImagePath),
     };
   };
 
@@ -714,7 +714,7 @@ export async function getProjectByUuid(uuid, { includePrivate = false, increment
     media: media.map((m) => ({
       id: m.uuid,
       mediaType: m.mediaType,
-      url: `/uploads/${m.file_path}`,
+      url: mediaUrl(m.file_path),
       fileName: m.fileName,
       caption: m.caption,
       sortOrder: m.sortOrder,

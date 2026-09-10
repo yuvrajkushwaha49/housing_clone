@@ -1,7 +1,7 @@
 import { query, withTransaction } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import { generateUuid } from '../helpers/crypto.helper.js';
-import { deleteStoredFile, slugify, storeUpload } from '../helpers/storage.helper.js';
+import { deleteStoredFile, mediaUrl, slugify, storeUpload } from '../helpers/storage.helper.js';
 import { writeActivityLog, writeAuditLog } from '../helpers/audit.helper.js';
 import { notifyUser } from '../helpers/notification.helper.js';
 import * as locationService from './location.service.js';
@@ -524,7 +524,7 @@ export async function getPropertyByUuid(uuid, { includePrivate = false, incremen
   const mapped = mapPropertyRow(row);
   const result = {
     ...mapped,
-    primaryImageUrl: row.primary_image ? `/uploads/${row.primary_image}` : null,
+    primaryImageUrl: mediaUrl(row.primary_image),
     country: country[0] ? { id: country[0].uuid, name: country[0].name } : null,
     state: state[0] ? { id: state[0].uuid, name: state[0].name } : null,
     amenities: amenities.map((a) => ({
@@ -553,7 +553,7 @@ export async function getPropertyByUuid(uuid, { includePrivate = false, incremen
       sortOrder: m.sortOrder,
       isPrimary: Boolean(m.isPrimary),
       title: m.title,
-      url: `/uploads/${m.filePath}`,
+      url: mediaUrl(m.filePath),
     })),
   };
 
@@ -734,7 +734,7 @@ export async function searchProperties(filters = {}) {
   return {
     items: rows.map((r) => ({
       ...mapPropertyRow(r),
-      primaryImageUrl: r.primary_image ? `/uploads/${r.primary_image}` : null,
+      primaryImageUrl: mediaUrl(r.primary_image),
     })),
     meta: {
       page,

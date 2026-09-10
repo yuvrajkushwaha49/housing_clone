@@ -3,6 +3,7 @@ import ApiError from '../utils/ApiError.js';
 import { generateUuid } from '../helpers/crypto.helper.js';
 import { writeAuditLog } from '../helpers/audit.helper.js';
 import { notifyUser } from '../helpers/notification.helper.js';
+import { mediaUrl } from '../helpers/storage.helper.js';
 
 function parseJson(value, fallback = null) {
   if (value == null) return fallback;
@@ -531,16 +532,14 @@ export async function listFeaturedDevelopers({ limit = 6, cityId } = {}) {
       minPrice: r.min_price != null ? Number(r.min_price) : null,
       maxPrice: r.max_price != null ? Number(r.max_price) : null,
       location: [r.locality_name, r.city_name].filter(Boolean).join(', '),
-      primaryImage: r.primary_image ? `/uploads/${r.primary_image}` : null,
+      primaryImage: mediaUrl(r.primary_image),
     };
   });
 
   const items = rows.map((r) => {
     let logoUrl = r.logo_url || null;
-    if (logoUrl && !logoUrl.startsWith('http') && !logoUrl.startsWith('/')) {
-      logoUrl = `/uploads/${logoUrl}`;
-    } else if (logoUrl && logoUrl.startsWith('uploads/')) {
-      logoUrl = `/${logoUrl}`;
+    if (logoUrl && !/^https?:\/\//i.test(logoUrl)) {
+      logoUrl = mediaUrl(logoUrl);
     }
     return {
       id: r.uuid,

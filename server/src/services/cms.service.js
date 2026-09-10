@@ -1,7 +1,7 @@
 import { query } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import { generateUuid } from '../helpers/crypto.helper.js';
-import { deleteStoredFile, slugify, storeUpload } from '../helpers/storage.helper.js';
+import { deleteStoredFile, mediaUrl, slugify, storeUpload } from '../helpers/storage.helper.js';
 import { writeAuditLog } from '../helpers/audit.helper.js';
 
 async function uniqueSlug(table, base, excludeId = null) {
@@ -42,7 +42,7 @@ function mapArticle(r) {
     title: r.title,
     excerpt: r.excerpt,
     body: r.body,
-    coverImage: r.cover_image ? `/uploads/${r.cover_image}` : null,
+    coverImage: mediaUrl(r.cover_image),
     status: r.status,
     metaTitle: r.meta_title,
     metaDescription: r.meta_description,
@@ -57,7 +57,7 @@ function mapBanner(r) {
   return {
     id: r.uuid,
     title: r.title,
-    imageUrl: r.image_path ? `/uploads/${r.image_path}` : null,
+    imageUrl: mediaUrl(r.image_path),
     linkUrl: r.link_url,
     position: r.position,
     startsAt: r.starts_at,
